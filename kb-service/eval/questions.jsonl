@@ -1,0 +1,6 @@
+{"question": "What did the August 2024 Stay Experience report say?", "expected_files": ["Hilton PBI Stay Experience August 2024.pdf"]}
+{"question": "Show the Stay Experience results for February 2024", "expected_files": ["Hilton PBI Stay Experience Feb 2024.pdf"]}
+{"question": "Which general ledger file covers August 2026?", "expected_files": ["08.2026 General_Ledger_Activity_Detail.xlsx"]}
+{"question": "Labor summary for September 1 2026", "expected_files": ["2026-09-01__Hilton_PBI_Labor_Summary.xlsx"]}
+{"question": "F&B sales comparison for September 2026", "expected_files": ["FB sales comparison September 2026.xlsx"]}
+{"question": "Where are we tracking room renovations?", "expected_files": ["Hilton Room Renovations Tracker.xlsx"]}
