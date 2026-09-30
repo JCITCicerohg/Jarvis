@@ -1,4 +1,5 @@
 import { DEFAULT_EMBED_DIM } from '../db/migrate.ts';
+import { redactCredentials } from '../redact.ts';
 
 export interface Embedder { model: string; dim: number; embed(texts: string[]): Promise<number[][]> }
 
@@ -25,22 +26,6 @@ export class LocalEmbedder implements Embedder {
 export interface EmbedTarget { url: string; headers: Record<string, string>; body: Record<string, unknown>; model: string }
 
 const BATCH = 96;
-
-/** Redact credential values from error text. */
-const redactCredentials = (text: string, headers: Record<string, string>): string => {
-  let redacted = text;
-  for (const value of Object.values(headers)) {
-    const escaped = value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    redacted = redacted.replace(new RegExp(escaped, 'g'), '[redacted]');
-    // Also extract and redact the key if it's in Bearer form
-    const bearerMatch = value.match(/^Bearer\s+(.+)$/);
-    if (bearerMatch) {
-      const keyEscaped = bearerMatch[1].replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-      redacted = redacted.replace(new RegExp(keyEscaped, 'g'), '[redacted]');
-    }
-  }
-  return redacted;
-};
 
 export function openaiEmbedTarget(key: string): EmbedTarget {
   if (!key) throw new Error('OPENAI_API_KEY is not set; kb-service needs it for embeddings (or set KB_EMBED_PROVIDER=azure).');

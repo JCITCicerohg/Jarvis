@@ -72,6 +72,30 @@ describe('ChatJson (OpenAI / Azure)', () => {
     const bad = (async () => new Response('nope', { status: 401 })) as unknown as typeof fetch;
     await expect(new ChatJson(openaiJson('k', 'm').target, bad).json('s', 'u', {})).rejects.toThrow(/401/);
   });
+
+  it('redacts OpenAI Bearer credentials from error messages', async () => {
+    const fake = (async () => new Response('bad key sk-secret-9 for Bearer sk-secret-9', { status: 401 })) as unknown as typeof fetch;
+    const target = openaiJson('sk-secret-9', 'm').target;
+    await expect(new ChatJson(target, fake).json('s', 'u', {})).rejects.toThrow(/chat completions 401/);
+    try {
+      await new ChatJson(target, fake).json('s', 'u', {});
+    } catch (e) {
+      expect(String(e)).not.toContain('sk-secret-9');
+      expect(String(e)).toContain('[redacted]');
+    }
+  });
+
+  it('redacts Azure api-key credentials from error messages', async () => {
+    const fake = (async () => new Response('bad key az-secret-9 for api-key az-secret-9', { status: 401 })) as unknown as typeof fetch;
+    const target = azureJson({ endpoint: 'https://tiro.openai.azure.com', key: 'az-secret-9', apiVersion: '2024-10-21' }, 'tiro-mini').target;
+    await expect(new ChatJson(target, fake).json('s', 'u', {})).rejects.toThrow(/chat completions 401/);
+    try {
+      await new ChatJson(target, fake).json('s', 'u', {});
+    } catch (e) {
+      expect(String(e)).not.toContain('az-secret-9');
+      expect(String(e)).toContain('[redacted]');
+    }
+  });
 });
 
 describe('planQuestion', () => {

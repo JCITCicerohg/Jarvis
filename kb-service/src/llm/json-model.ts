@@ -1,3 +1,5 @@
+import { redactCredentials } from '../redact.ts';
+
 /** One structured-output call: returns the JSON object the model produced for `schema`. */
 export interface JsonModel { name: string; json(system: string, user: string, schema: Record<string, unknown>): Promise<unknown> }
 
@@ -38,7 +40,11 @@ export class ChatJson implements JsonModel {
         response_format: { type: 'json_schema', json_schema: { name: 'plan', strict: true, schema } },
       }),
     });
-    if (!res.ok) throw new Error(`chat completions ${res.status}: ${(await res.text()).slice(0, 300)}`);
+    if (!res.ok) {
+      const text = await res.text();
+      const redacted = redactCredentials(text.slice(0, 300), this.target.headers);
+      throw new Error(`chat completions ${res.status}: ${redacted}`);
+    }
     const data = (await res.json()) as { choices?: { message?: { content?: string | null; refusal?: string | null } }[] };
     const msg = data.choices?.[0]?.message;
     if (msg?.refusal) throw new Error('model refused: ' + msg.refusal);
