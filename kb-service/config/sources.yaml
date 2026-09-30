@@ -1,0 +1,9 @@
+sources:
+  - id: hilton-pbi
+    name: Hilton Palm Beach PBI
+    business: Cicero Hospitality Group
+    hotel: Hilton Palm Beach PBI
+    drive_id: "b!jdzaTEakwE2NJPvDBZJWzXcFMv2TcyVKqI2w_qwcCh0Mdg0JeuLATaBfh4OH160j"
+    root_path: Hilton Palm Beach PBI
+    levels: [department, dataset]
+    enabled: true
