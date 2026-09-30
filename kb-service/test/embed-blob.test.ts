@@ -81,6 +81,25 @@ describe('HttpEmbedder', () => {
     expect(() => openaiEmbedTarget('')).toThrow(/OPENAI_API_KEY/);
     expect(() => azureEmbedTarget({ endpoint: '', key: 'k', apiVersion: 'v', embedDeployment: 'd' })).toThrow(/AZURE_OPENAI_ENDPOINT/);
   });
+
+  it('does not retry on 401 and redacts credentials from error message', async () => {
+    let callCount = 0;
+    const fake = (async () => {
+      callCount++;
+      return new Response('bad key sk-secret-123 for Bearer sk-secret-123', { status: 401 });
+    }) as unknown as typeof fetch;
+    const e = new HttpEmbedder(openaiEmbedTarget('sk-secret-123'), fake, 0);
+    let error: Error | null = null;
+    try {
+      await e.embed(['x']);
+    } catch (err) {
+      error = err as Error;
+    }
+    expect(error).not.toBeNull();
+    expect(error!.message).toMatch(/Embeddings 401/);
+    expect(error!.message).not.toMatch(/sk-secret-123/);
+    expect(callCount).toBe(1);
+  });
 });
 
 describe('LocalBlobStore', () => {

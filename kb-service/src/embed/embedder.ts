@@ -26,6 +26,22 @@ export interface EmbedTarget { url: string; headers: Record<string, string>; bod
 
 const BATCH = 96;
 
+/** Redact credential values from error text. */
+const redactCredentials = (text: string, headers: Record<string, string>): string => {
+  let redacted = text;
+  for (const value of Object.values(headers)) {
+    const escaped = value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    redacted = redacted.replace(new RegExp(escaped, 'g'), '[redacted]');
+    // Also extract and redact the key if it's in Bearer form
+    const bearerMatch = value.match(/^Bearer\s+(.+)$/);
+    if (bearerMatch) {
+      const keyEscaped = bearerMatch[1].replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      redacted = redacted.replace(new RegExp(keyEscaped, 'g'), '[redacted]');
+    }
+  }
+  return redacted;
+};
+
 export function openaiEmbedTarget(key: string): EmbedTarget {
   if (!key) throw new Error('OPENAI_API_KEY is not set; kb-service needs it for embeddings (or set KB_EMBED_PROVIDER=azure).');
   return { url: 'https://api.openai.com/v1/embeddings', headers: { Authorization: `Bearer ${key}` }, body: { model: 'text-embedding-3-small' }, model: 'text-embedding-3-small' };
@@ -62,7 +78,11 @@ export class HttpEmbedder implements Embedder {
       await new Promise(r => setTimeout(r, this.backoffMs * 2 ** attempt));
       return this.batch(input, attempt + 1);
     }
-    if (!res.ok) throw new Error(`Embeddings ${res.status}: ${(await res.text()).slice(0, 300)}`);
+    if (!res.ok) {
+      const text = await res.text();
+      const redacted = redactCredentials(text.slice(0, 300), this.target.headers);
+      throw new Error(`Embeddings ${res.status}: ${redacted}`);
+    }
     const data = (await res.json()) as { data: { index: number; embedding: number[] }[] };
     return data.data.sort((a, b) => a.index - b.index).map(d => d.embedding);
   }
