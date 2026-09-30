@@ -4,6 +4,7 @@ import { complete } from './agent/llm.ts';
 import { chatPrompt, type ChatTaskLine } from './agent/prompt.ts';
 import { startRun } from './agent/runner.ts';
 import { memoryContext, memoryQuery, memorySaveRule, memoryWrite, rulesText } from './agent/tools/memory.ts';
+import { kbConfigured, kbQuery } from './agent/tools/kb.ts';
 import { store } from './state.ts';
 import { engineSummary } from './integrations.ts';
 
@@ -97,9 +98,15 @@ const MEMORY_RULE: Anthropic.Tool = {
   input_schema: { type: 'object', properties: { rule: { type: 'string' }, reason: { type: 'string' } }, required: ['rule'] },
 };
 
+const KB_QUERY: Anthropic.Tool = {
+  name: 'kb_query',
+  description: "Answer a question from the company's SharePoint documents and spreadsheets (hotel reports, GLs, labor, guest scores, trackers). Returns Result JSON; answer only from it and cite the file.",
+  input_schema: { type: 'object', properties: { question: { type: 'string' } }, required: ['question'] },
+};
+
 const text = (v: unknown) => (typeof v === 'string' && v.trim() ? v : undefined);
 
-function runChatTool(b: Anthropic.ToolUseBlockParam, live: boolean, taskIds: Set<string>, actions: AgentAction[]): { text: string; isError?: boolean } {
+async function runChatTool(b: Anthropic.ToolUseBlockParam, live: boolean, taskIds: Set<string>, actions: AgentAction[]): Promise<{ text: string; isError?: boolean }> {
   const i = (b.input ?? {}) as Record<string, unknown>;
   switch (b.name) {
     case 'start_task': {
@@ -157,6 +164,11 @@ function runChatTool(b: Anthropic.ToolUseBlockParam, live: boolean, taskIds: Set
       if (r.added) actions.push({ type: 'memory', text: `Remembered · ${entity}: ${fact}` });
       return { text: r.added ? 'Saved' : 'Already known' };
     }
+    case 'kb_query': {
+      const q = text(i.question);
+      if (!q) return { text: 'question is required', isError: true };
+      try { return { text: await kbQuery(q) }; } catch (e) { return { text: (e as Error).message, isError: true }; }
+    }
   }
   return { text: 'Unknown tool ' + b.name, isError: true };
 }
@@ -179,7 +191,7 @@ export async function chat(body: ChatBody): Promise<{ reply: string; actions: Ag
   const recent = body.messages.filter(m => m.role === 'user').slice(-2).map(m => m.text).join(' ');
   const memory = live ? memoryContext(recent) : '';
   const system = chatPrompt(lines, live ? rulesText() : '(demo mode)', live, body.clock ?? new Date().toLocaleTimeString(), live ? await engineSummary() : '', memory);
-  const tools = live ? [LIVE_START, DECIDE, ANSWER, ASK, MEMORY_QUERY, MEMORY_WRITE, MEMORY_RULE] : [DEMO_START, DECIDE, ASK];
+  const tools = live ? [LIVE_START, DECIDE, ANSWER, ASK, MEMORY_QUERY, MEMORY_WRITE, MEMORY_RULE, ...(kbConfigured() ? [KB_QUERY] : [])] : [DEMO_START, DECIDE, ASK];
   const taskIds = new Set(lines.map(t => t.id));
   const actions: AgentAction[] = [];
 
@@ -196,12 +208,12 @@ export async function chat(body: ChatBody): Promise<{ reply: string; actions: Ag
     if (t) reply = t;
     if (response.stop_reason === 'pause_turn') continue;
     if (response.stop_reason !== 'tool_use') break;
-    const results: Anthropic.ToolResultBlockParam[] = response.content
+    const results: Anthropic.ToolResultBlockParam[] = await Promise.all(response.content
       .filter((b): b is Anthropic.ToolUseBlockParam => b.type === 'tool_use')
-      .map(b => {
-        const r = runChatTool(b, live, taskIds, actions);
-        return { type: 'tool_result', tool_use_id: b.id, content: r.text, ...(r.isError ? { is_error: true } : {}) };
-      });
+      .map(async b => {
+        const r = await runChatTool(b, live, taskIds, actions);
+        return { type: 'tool_result' as const, tool_use_id: b.id, content: r.text, ...(r.isError ? { is_error: true } : {}) };
+      }));
     messages.push({ role: 'user', content: results });
   }
   return { reply: reply || 'Done.', actions };

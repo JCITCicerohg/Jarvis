@@ -11,6 +11,7 @@ import { irreversibleReason } from './risk.ts';
 import { ANALYTICS_TOOLS } from './analytics.ts';
 import { BROWSER_TOOLS } from './browser.ts';
 import { GRAPH_TOOLS } from './graph.ts';
+import { KB_TOOLS } from './kb.ts';
 import { SELFMOD_TOOLS } from './selfmod.ts';
 import { engineBlocked, engineOf } from '../../integrations.ts';
 import { bool, num, parser, short, str, strs, tool, type ToolCtx, type ToolOutput, type ToolSpec } from './spec.ts';
@@ -271,7 +272,7 @@ const CORE_TOOLS: ToolSpec<unknown>[] = [
   }),
 ];
 
-const TOOLS = [...CORE_TOOLS, ...BROWSER_TOOLS, ...GRAPH_TOOLS, ...ANALYTICS_TOOLS, ...SELFMOD_TOOLS];
+const TOOLS = [...CORE_TOOLS, ...BROWSER_TOOLS, ...GRAPH_TOOLS, ...ANALYTICS_TOOLS, ...KB_TOOLS, ...SELFMOD_TOOLS];
 export const TASK_TOOLS: Anthropic.Tool[] = TOOLS.map(t => t.def);
 const BY_NAME = new Map(TOOLS.map(t => [t.def.name, t]));
 
