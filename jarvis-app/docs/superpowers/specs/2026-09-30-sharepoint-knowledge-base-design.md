@@ -1,6 +1,6 @@
 # Jarvis Knowledge Base: SharePoint → DigitalOcean RAG — Design
 
-Date: 2026-09-30 · Status: draft for review (rev 2: environments/generations, query pipeline, indexing improvements)
+Date: 2026-09-30 · Status: draft for review (rev 3: + corrections layer)
 
 ## 1. Goal
 
@@ -16,6 +16,7 @@ Mirror selected SharePoint/OneDrive folders into a knowledge base on DigitalOcea
 - Jarvis answers numeric questions over recurring spreadsheets and reports ("Total Amazon GL spend Jan–Aug 2026 vs 2025", "Guest score trend 2024–2026") from computed data, and states any missing periods.
 - A retrieval eval set (≈20 real questions with expected source files and answers) scores hit@5 ≥ 85%.
 - Adding another folder or hotel is a config change, not a code change.
+- A correction told to Jarvis is remembered with who said it and when, never overwrites official data, reaches other users only after approval, and is flagged for review when a newer official document covers the same subject.
 
 **Non-goals (phase 1):** per-user/department access enforcement (data is tagged and the filter hook exists; enforcement is phase 2), a GraphRAG node/edge graph (entity tags cover the need), a web UI other than Jarvis's Apps modal panel, write-back to SharePoint.
 
@@ -46,12 +47,13 @@ kb-service  — TypeScript, Docker (blue/green containers), same Droplet
       ▼
 DO Managed PostgreSQL 16 + pgvector                    DO Spaces (bucket: jarvis-kb)
   kb_meta (active_generation, generations,                raw/<source>/<driveItemId>/<cTag>   (shared by all generations)
-           sources, sync_state, query_log)                g<N>/tidy/<source>/<dataset>/<period>.parquet
+           sources, sync_state, query_log,                g<N>/tidy/<source>/<dataset>/<period>.parquet
+           corrections, users)
   kb_g<N> schemas: documents, sections, chunks,
                    datasets, metrics, entities, folders
       ▲
-      │  HTTPS + API key
-Jarvis (owner's PC) — kb_query (main), kb_search, kb_fetch_dataset → formats the answer
+      │  HTTPS + per-user API key
+Jarvis (owner's PC) — kb_query (main), kb_search, kb_fetch_dataset, kb_correct → formats the answer
 Test environment: kb-test service + kb_test database + test/ Spaces prefix + test SharePoint folder, used by Jarvis's test instance (:8788)
 ```
 
@@ -199,6 +201,8 @@ interface QueryResult {
   answer_data?: Record<string, string | number>[];   // computed rows for numeric intents
   passages?: { text: string; heading: string; file: string; page?: number; link: string; period?: string; score: number }[];
   files?: { file: string; link: string; period?: string; summary: string }[];
+  corrections?: { text: string; author: string; created: string; scope: 'global' | 'personal';
+                  status: 'approved' | 'pending' | 'needs_review'; contradicts?: string }[];   // §8, never merged into the above
   coverage: { requested?: string[]; missing: string[] };
   notes: string[];
   confidence: 'high' | 'medium' | 'low';
@@ -208,47 +212,81 @@ interface QueryResult {
 Trimmed to a token budget (default ~3k tokens) before returning.
 
 ### 7.4 Formatter (Jarvis)
-Jarvis's chat/task model receives only the `QueryResult` JSON and formats per `answer_shape`: headline number + table; period table for trends; answer + short quotes for documents; file list for finding files. Every answer ends with sources (file, page, link); missing coverage and dropped filters are stated plainly; nothing outside the JSON is asserted as fact.
+Jarvis's chat/task model receives only the `QueryResult` JSON and formats per `answer_shape`: headline number + table; period table for trends; answer + short quotes for documents; file list for finding files. Every answer ends with sources (file, page, link); missing coverage and dropped filters are stated plainly; nothing outside the JSON is asserted as fact. Corrections are presented as in 8.5.
 
-## 8. API (kb-service `/v1`)
+## 8. Learning from corrections
+
+### 8.1 Two kinds of learning
+- **Preferences** (how to answer: "always show financials as bullets") stay in Jarvis's existing rules memory (`memory_save_rule`). Phase 2 moves them to a per-user `kb_meta.user_profiles` table injected into that user's prompt.
+- **Corrections** (facts about the business: "the lobby renovation slipped to Q4") go to the corrections layer below.
+
+### 8.2 Official data is read-only
+Data from SharePoint is never modified, deleted or overwritten by anything a user says. Corrections live in their own table, `kb_meta.corrections`, outside the generations, so rebuilds and cutovers never lose them. The database role used by the query API may insert and update corrections only; it has no write privilege on documents, chunks, datasets or metrics. Only the ingestion role writes official data.
+
+### 8.3 Corrections table
+`id`, `text` (the fact, as extracted), `original_message`, `author_user_id`, `author_name`, `created_at`, `scope` (`global` | `personal`), `status` (`pending` | `approved` | `rejected` | `needs_review` | `expired`), `subject` (hotel, department, dataset, entity ids, period — resolved against the catalog), `embedding`, `tsv`, `review_due_at`, `expires_at`, `approved_by`, `approved_at`, `superseded_by_document_id`. Entity and dataset links are stored by name and re-resolved against each new generation at cutover.
+
+### 8.4 Capture, scope and approval
+- Jarvis tool `kb_correct(message)`: kb-service uses Haiku 4.5 (strict schema) to extract the fact and its subject, validated against the catalog; ambiguous subjects come back for Jarvis to ask one clarifying question.
+- **Default scope is global.** A global correction is created `pending`; it is visible immediately to its author (labelled "pending approval") and to no one else until approved. The user can say "just for me" to make it `personal`, which applies at once to that user only.
+- Approval: pending corrections appear in Jarvis's existing Approvals list for the admin (the owner), and an n8n workflow sends a Teams message with Approve / Reject links (signed, single-use). Approval sets `approved_by`/`approved_at`; rejection keeps the row for audit.
+- Identity: each user has their own query API key, mapped to `user_id` and display name. Phase 1: owner and executive.
+
+### 8.5 Retrieval and presentation
+- Every query also searches corrections (hybrid, same filter tree) visible to the caller: approved global + the caller's own pending and personal ones. Other users' personal or pending corrections are never returned.
+- Matches go only into `QueryResult.corrections`, never into `passages` or `answer_data`. Computed numbers always come from official data.
+- If a correction's subject overlaps a returned passage or computed row, the executor sets `contradicts` to that source's file/period.
+- Formatter rule: when a correction conflicts with a document, state both and who said it: "The Projects tracker says September. **Correction from [author], Sep 30:** delayed to Q4." Pending corrections are labelled pending; `needs_review` ones are labelled "may be outdated".
+
+### 8.6 Expiry and supersession
+- **Supersession:** when the ingestion pipeline indexes a document whose subject overlaps an active correction (same hotel and entity or dataset) and which is newer (later period, or modified after the correction), the correction is set to `needs_review` and linked via `superseded_by_document_id`. The author (for personal) or the admin (for global) is asked in Jarvis whether to keep or retire it.
+- **Time limits:** personal corrections expire after 90 days; global corrections get `review_due_at` = 180 days and move to `needs_review` then. Both configurable in `config/indexing.yaml`.
+- Expired and rejected corrections are never returned in queries but remain for audit.
+
+## 9. API (kb-service `/v1`)
 - `POST /query {question, k?}` → `QueryResult` (7).
 - `POST /search {query, filter?, k = 8}` → passages (direct hybrid search, no planner).
 - `GET /datasets?…` and `POST /datasets/fetch {ids}` → dataset list and presigned Parquet URLs (≤ 15 min).
 - `GET /status` → per source and generation: last sync, counts by status, lane backlogs, recent errors, eval scores.
+- `POST /corrections {message, scope?}` → extracted correction (or a clarifying question); `GET /corrections?status=` (caller's own, or all for admin); `POST /corrections/{id}/decide {approve | reject | keep | retire}` (admin, or author for personal).
 - Admin (API key with admin scope): `POST /admin/generations`, `GET /admin/generations`, `POST /admin/cutover {generation}`, `POST /admin/rollback`.
 - Ingestion (HMAC, VPC only): `GET /sources`, `POST /changes`, `POST /sync-state`, `POST /resync`.
 
-## 9. Jarvis integration
+## 10. Jarvis integration
 New tools in `server/agent/tools/kb.ts`, available to the task runner and chat loop:
 - `kb_query(question)` — the default for company-document and data questions; returns `QueryResult`.
 - `kb_search(query, filter?)` — direct passage search when Jarvis already knows what it wants.
 - `kb_fetch_dataset(ids)` — downloads Parquet to `data/kb/` and registers DuckDB views, for follow-up analysis with the existing `analytics_query`.
-- Prompt additions: when to use `kb_query` vs `memory_query`, the formatting rules in 7.4, citation format.
+- `kb_correct(message, scope?)` — records a user correction about company data (§8); Jarvis confirms in one line ("Saved, pending approval company-wide. Say 'just for me' to keep it personal.").
+- Prompt additions: when to use `kb_query` vs `memory_query`, `kb_correct` vs `memory_save_rule` (facts about company data vs preferences), the formatting rules in 7.4 and 8.5, citation format.
+- Approvals list: pending global corrections and `needs_review` corrections appear alongside existing approvals.
 - Apps modal "Knowledge Base" card: `/status` summary, lane backlogs, generations list, and **Cut over** / **Roll back** buttons (both go through Jarvis's existing approval gate), plus an on/off switch.
 - Config: `KB_API_URL`, `KB_API_KEY` (and `KB_ADMIN_KEY` for the modal's admin actions) in `.env`. The test instance uses kb-test's URL.
 - The existing SQLite memory stays for personal facts and rules.
 
-## 10. Security
+## 11. Security
 - Azure app registration, app-only, **`Sites.Selected`** read grant on the CiceroHospitalityGroup site only; each new site/OneDrive needs its own grant (spike item 5).
 - n8n ↔ kb-service over the Droplet's private network; HMAC with `KB_INGEST_SECRET`, timestamped, 5-min replay window.
 - Query API behind Caddy (TLS); separate query and admin keys. Phase 2: keys map to `(business, hotel, department)` scopes enforced in the executor.
-- Postgres: kb-service role (read/write), read-only role; DB reachable only from the Droplet. Planner output only ever reaches SQL through parameters/templates.
+- Postgres: ingestion role (writes official data), query role (reads official data, writes only `corrections` and `query_log`), read-only role; DB reachable only from the Droplet.
+- Corrections can never alter official data (8.2); global ones reach other users only after human approval; Teams approval links are signed, single-use and expire in 7 days. Planner output only ever reaches SQL through parameters/templates.
 - Spaces private; presigned URLs ≤ 15 min. Secrets in Droplet env files, not n8n workflow JSON.
 
-## 11. Error handling and observability
+## 12. Error handling and observability
 - Document-level status/errors; retries as in 5.4.
 - Nightly reconciliation: Graph file count per source vs `documents` rows in the active generation; mismatch surfaced in `/status`.
 - Query log (`kb_meta.query_log`): question, plan, generation, latency, result counts, confidence — used for eval growth and for the slow lane's latency guard.
 - n8n error workflow reports failures to kb-service; structured JSON logs; `/health` for Docker restarts.
 
-## 12. Testing
+## 13. Testing
 - **Unit:** date/path parser (every §2 format, ranges, loose files), each normalizer and extractor against real fixtures, header detection, parent–child chunker, table splitting, RRF, filter-tree → SQL compiler (including injection attempts), plan validation against a catalog, relative-date resolution, measure → SQL templates, HMAC.
 - **Integration (Docker Compose, Postgres + pgvector):** ingest fixtures; update, move, delete, resync sweep; slow-lane throttling and pause; build a second generation, fan-out during catch-up, gate, cutover, rollback — asserting a concurrent query stream never errors or returns mixed generations.
+- **Corrections:** query role cannot write official tables (permission test); scope visibility matrix (author/other user × global pending/approved/personal); corrections never appear in `passages`/`answer_data`; supersession flags on ingest of a newer overlapping document; expiry; corrections survive a generation cutover and re-link.
 - **Planner:** golden set of ~30 questions → expected plans (intent, filters, periods); run against the real model before each prompt/model change.
 - **End-to-end:** test SharePoint folder: add, edit, rename, move, delete; assert search reflects each within 10 minutes.
 - **Eval:** `eval/questions.jsonl` (≈20 owner-supplied questions with expected files and, for numeric ones, expected values); reports hit@5, MRR and numeric accuracy per generation. Part of the cutover gate.
 
-## 13. Phase 0 spike (before building, ~1 day)
+## 14. Phase 0 spike (before building, ~1 day)
 Throwaway scripts against the real site to confirm:
 1. Delta on the Shared Documents drive returns `@microsoft.graph.downloadUrl`, and what a folder move/rename emits for its children.
 2. Deleted items can be mapped to our folder tree by id.
@@ -258,12 +296,12 @@ Throwaway scripts against the real site to confirm:
 6. Samples of Labor Summary, Inventory and Stay Experience to design their normalizers/extractors.
 7. pgvector version on DO Managed PostgreSQL 16 (iterative index scan support).
 
-## 14. Infrastructure and rough cost
+## 15. Infrastructure and rough cost
 - Droplet (n8n + kb-service blue/green + kb-test + Caddy), 8 GB RAM: ~$48/mo.
 - DO Managed PostgreSQL 16, 4 GB (room for two generations + test DB): ~$60/mo.
 - Spaces: $5/mo (250 GB).
 - Embeddings + Haiku enrichment/planning: initial Hilton backfill ~$5–15; ongoing a few dollars/month.
 Prices approximate; confirm at provisioning.
 
-## 15. Phase 2 (not in this build)
+## 16. Phase 2 (not in this build)
 Department/hotel access scopes on API keys; more hotels as sources; Graph change-notification webhook for sub-5-minute latency; automatic cutover once the gate passes; more named normalizers/extractors as datasets recur.
