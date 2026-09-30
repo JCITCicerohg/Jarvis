@@ -3,7 +3,7 @@ import type { AiProvider } from '../types';
 import type { Ui } from '../ui';
 import { Orb } from './Orb';
 
-const KEY_HINT: Record<AiProvider, string> = { anthropic: 'sk-ant-…', openai: 'sk-…', gemini: 'AIza…', compatible: 'Leave empty if the server needs none' };
+const KEY_HINT: Record<AiProvider, string> = { anthropic: 'sk-ant-…', openai: 'sk-…', gemini: 'AIza…', azure: 'Key 1 from the Azure OpenAI resource', compatible: 'Leave empty if the server needs none' };
 
 /** In-app setup: pick the AI provider and model, and enter or replace its API key. The server checks it, then stores the key DPAPI-encrypted. */
 export function Setup({ ui }: { ui: Ui }) {
@@ -24,7 +24,7 @@ export function Setup({ ui }: { ui: Ui }) {
   useEffect(() => {
     let on = true;
     setModels([]);
-    j.listModels(provider, provider === 'compatible' ? probe : '').then(m => { if (on) setModels(m); });
+    j.listModels(provider, provider === 'compatible' || provider === 'azure' ? probe : '').then(m => { if (on) setModels(m); });
     return () => { on = false; };
   }, [provider, probe, j.listModels, s.key]);
 
@@ -90,11 +90,11 @@ export function Setup({ ui }: { ui: Ui }) {
           )}
         </div>
 
-        {provider === 'compatible' && (
+        {(provider === 'compatible' || provider === 'azure') && (
           <div className="field">
-            <label htmlFor="baseurl">Base URL</label>
+            <label htmlFor="baseurl">{provider === 'azure' ? 'Azure endpoint' : 'Base URL'}</label>
             <input
-              id="baseurl" className="input" autoComplete="off" spellCheck={false} placeholder="http://localhost:11434/v1"
+              id="baseurl" className="input" autoComplete="off" spellCheck={false} placeholder={provider === 'azure' ? 'https://<resource>.openai.azure.com' : 'http://localhost:11434/v1'}
               value={baseUrl} onChange={e => { setBaseUrl(e.target.value); setError(''); }} onBlur={() => setProbe(baseUrl)}
             />
           </div>
@@ -110,7 +110,7 @@ export function Setup({ ui }: { ui: Ui }) {
         </div>
 
         <div className="field">
-          <label htmlFor="model">Model</label>
+          <label htmlFor="model">{provider === 'azure' ? 'Deployment name' : 'Model'}</label>
           <input
             id="model" className="input" list="jarvis-models" autoComplete="off" spellCheck={false} placeholder={p?.defaultModel}
             value={model} onChange={e => { setModel(e.target.value); setError(''); }}

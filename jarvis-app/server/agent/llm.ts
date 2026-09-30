@@ -1,5 +1,5 @@
 import Anthropic from '@anthropic-ai/sdk';
-import { active, claude, http, httpError, type Active } from './claude.ts';
+import { active, authHeaders, claude, http, httpError, type Active } from './claude.ts';
 
 /**
  * One model turn on the provider picked in setup. Messages and tools stay in Anthropic's format
@@ -21,6 +21,17 @@ export interface Turn {
 }
 export interface Reply { content: Anthropic.ContentBlockParam[]; stop_reason: string | null }
 
+/** Haiku 4.5 takes neither adaptive thinking nor effort; newer models get both. */
+const legacyModel = (model: string) => /haiku/i.test(model);
+
+export function anthropicParams(model: string, t: Turn, system: Anthropic.TextBlockParam[]) {
+  return {
+    model, max_tokens: t.maxTokens,
+    ...(legacyModel(model) ? {} : { output_config: { effort: t.effort }, thinking: { type: 'adaptive' as const, display: 'summarized' as const } }),
+    cache_control: { type: 'ephemeral' as const }, system, tools: t.tools, messages: t.messages,
+  };
+}
+
 export async function complete(t: Turn): Promise<Reply> {
   const a = active();
   if (a.provider !== 'anthropic') return openaiTurn(a, t);
@@ -29,10 +40,7 @@ export async function complete(t: Turn): Promise<Reply> {
   // marker caches the conversation so far, so each turn of a task re-reads its history instead of re-sending it.
   const parts = typeof t.system === 'string' ? [t.system] : t.system;
   const system: Anthropic.TextBlockParam[] = parts.filter(Boolean).map((text, i) => ({ type: 'text', text, ...(i === 0 ? { cache_control: { type: 'ephemeral' as const } } : {}) }));
-  const stream = claude(a.key).messages.stream({
-    model: a.model, max_tokens: t.maxTokens, output_config: { effort: t.effort }, thinking: { type: 'adaptive', display: 'summarized' },
-    cache_control: { type: 'ephemeral' }, system, tools: t.tools, messages: t.messages,
-  }, { signal: t.signal });
+  const stream = claude(a.key).messages.stream(anthropicParams(a.model, t, system), { signal: t.signal });
   if (t.onText) { const on = t.onText; stream.on('text', (_delta, snapshot) => on(snapshot)); }
   if (t.onThought) {
     const on = t.onThought;
@@ -88,7 +96,7 @@ async function openaiTurn(a: Active, t: Turn): Promise<Reply> {
   const res = await http(a.baseUrl + '/chat/completions', {
     method: 'POST',
     signal: t.signal,
-    headers: { 'Content-Type': 'application/json', ...(a.key ? { Authorization: 'Bearer ' + a.key } : {}) },
+    headers: { 'Content-Type': 'application/json', ...authHeaders(a.provider, a.key) },
     body: JSON.stringify({
       model: a.model,
       messages: toOpenAI(typeof t.system === 'string' ? t.system : t.system.filter(Boolean).join('\n\n'), t.messages),

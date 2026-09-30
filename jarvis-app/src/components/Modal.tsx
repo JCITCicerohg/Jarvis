@@ -415,7 +415,7 @@ function SettingsPanel({ ui }: { ui: Ui }) {
     <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-8)' }}>
       <section style={{ display: 'flex', flexDirection: 'column' }}>
         <h6 style={h6}>AI model</h6>
-        <SettingRow icon="ph-brain" title="Provider and model" sub={aiLine(ui) + '. Claude, OpenAI, Gemini, or a local / OpenAI-compatible server.'}>
+        <SettingRow icon="ph-brain" title="Provider and model" sub={aiLine(ui) + '. Claude, OpenAI, Gemini, Azure OpenAI, or a local / OpenAI-compatible server.'}>
           <span className={'tag ' + (s.key?.configured ? 'tag-accent' : 'tag-neutral')}>{s.key?.configured ? 'Connected' : 'Missing'}</span>
           <button className="btn btn-ghost" onClick={() => j.set({ setup: true })} style={{ fontSize: 12 }}>{s.key?.configured ? 'Change' : 'Set up'}</button>
         </SettingRow>

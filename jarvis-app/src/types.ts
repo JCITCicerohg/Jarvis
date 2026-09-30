@@ -104,7 +104,7 @@ export type AgentAction =
 export interface MemoryGraph { nodes: MemNode[]; edges: [string, string][] }
 
 /** AI providers. Anthropic uses its SDK; the others speak the OpenAI chat-completions API. */
-export type AiProvider = 'anthropic' | 'openai' | 'gemini' | 'compatible';
+export type AiProvider = 'anthropic' | 'openai' | 'gemini' | 'azure' | 'compatible';
 export interface ProviderInfo {
   id: AiProvider;
   name: string;
