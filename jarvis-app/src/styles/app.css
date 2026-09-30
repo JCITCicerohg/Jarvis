@@ -1,0 +1,110 @@
+html, body, #root { margin: 0; height: 100%; overflow: hidden; }
+a { color: var(--color-accent); }
+a:hover { color: var(--color-accent-400); }
+input::placeholder, textarea::placeholder { color: var(--color-neutral-600); }
+
+@keyframes orbBreathe { 0%, 100% { transform: scale(1); opacity: .88 } 50% { transform: scale(1.06); opacity: 1 } }
+@keyframes orbThink { 0% { transform: rotate(0) scale(1) } 50% { transform: rotate(180deg) scale(1.1) } 100% { transform: rotate(360deg) scale(1) } }
+@keyframes orbListen { 0%, 100% { transform: scale(1) } 50% { transform: scale(1.16) } }
+
+/* Frosted chrome buttons: header fabs, Transcript, Voice replies (desktop). */
+.glass-btn {
+  display: flex; align-items: center; gap: 8px; height: 40px; padding: 0 14px; border: 0;
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--color-surface) 72%, transparent);
+  backdrop-filter: blur(12px); box-shadow: var(--shadow-sm);
+  color: var(--color-neutral-200); font: inherit; font-size: 13px; cursor: pointer;
+}
+.glass-btn:hover { box-shadow: 0 0 0 1px var(--color-accent-700); color: var(--color-accent-300); }
+
+/* Square icon-only variant used in the mobile header and footer. */
+.glass-sq {
+  position: relative; width: 44px; height: 44px; flex: none; display: grid; place-items: center; border: 0;
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--color-surface) 72%, transparent);
+  backdrop-filter: blur(12px); box-shadow: var(--shadow-sm);
+  color: var(--color-neutral-200); cursor: pointer;
+}
+
+.rail {
+  position: absolute; top: 50%; transform: translateY(-50%);
+  max-height: calc(100% - 260px); overflow-y: auto; overflow-x: hidden;
+  scrollbar-width: thin; scrollbar-color: var(--color-neutral-700) transparent;
+  display: flex; flex-direction: column; gap: 8px; padding: 4px;
+}
+
+.run-card {
+  display: flex; flex-direction: column; gap: 6px; padding: 10px 12px; border: 0;
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--color-surface) 62%, transparent);
+  backdrop-filter: blur(10px); box-shadow: var(--shadow-sm);
+  font: inherit; color: inherit; text-align: left; cursor: pointer;
+}
+.run-card:hover { box-shadow: 0 0 0 1px var(--color-accent-700); }
+.run-card.mobile { padding: 12px 14px; backdrop-filter: none; }
+.run-card.mobile:hover { box-shadow: var(--shadow-sm); }
+
+.decision-card {
+  display: flex; flex-direction: column; gap: 8px; padding: 12px 14px;
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--color-surface) 72%, transparent);
+  backdrop-filter: blur(10px);
+  box-shadow: 0 0 0 1px var(--color-accent-700), 0 0 24px color-mix(in srgb, var(--color-accent) 14%, transparent);
+}
+.decision-card.mobile { backdrop-filter: none; }
+
+.glow-card { box-shadow: 0 0 0 1px var(--color-accent-700), 0 0 28px color-mix(in srgb, var(--color-accent) 14%, transparent); }
+
+.progress { height: 2px; border-radius: 2px; background: var(--color-neutral-800); overflow: hidden; }
+.progress > div { height: 100%; background: var(--color-accent); transition: width .6s; }
+
+.task-row {
+  display: flex; align-items: center; gap: 12px; padding: 10px 12px; border: 0;
+  border-radius: var(--radius-md); background: transparent;
+  font: inherit; color: inherit; text-align: left; cursor: pointer;
+}
+.task-row:hover { background: color-mix(in srgb, var(--color-text) 6%, transparent); }
+
+.fade-rule {
+  background: linear-gradient(to right, transparent, var(--color-divider) 48px, var(--color-divider) calc(100% - 48px), transparent) no-repeat bottom / 100% 1px;
+}
+
+.mem-row {
+  display: flex; gap: var(--space-4); flex-wrap: wrap; align-items: baseline; padding: 10px 8px; border: 0;
+  font: inherit; color: inherit; text-align: left; cursor: pointer;
+  background: linear-gradient(to right, transparent, color-mix(in srgb, var(--color-text) 8%, transparent) 48px, color-mix(in srgb, var(--color-text) 8%, transparent) calc(100% - 48px), transparent) no-repeat bottom / 100% 1px;
+}
+.mem-row:hover { background-color: color-mix(in srgb, var(--color-text) 4%, transparent); }
+
+.link-tag { border: 0; font: inherit; font-size: 11px; cursor: pointer; }
+.link-tag:hover { background: var(--color-neutral-700); }
+
+.graph-node {
+  position: absolute; transform: translate(-50%, -50%); display: flex; flex-direction: column; align-items: center;
+  gap: 5px; padding: 4px; background: transparent; border: 0; color: inherit; font: inherit; cursor: pointer;
+  transition: opacity .2s;
+}
+
+.bare-btn { background: transparent; border: 0; color: inherit; font: inherit; cursor: pointer; }
+
+.mic-btn {
+  width: 44px; height: 44px; flex: none; border-radius: 50%; border: 1px solid var(--color-accent);
+  color: var(--color-accent-300); display: grid; place-items: center; cursor: pointer; transition: box-shadow .3s;
+}
+
+.approval-preview {
+  margin: 0; padding: 6px 8px; max-height: 260px; overflow: auto;
+  border-radius: var(--radius-sm); background: var(--color-neutral-900); box-shadow: var(--shadow-sm);
+  font: 12px/1.45 ui-monospace, Consolas, monospace; color: var(--color-neutral-200);
+  white-space: pre-wrap; word-break: break-word;
+}
+
+.composer-input {
+  flex: 1; min-width: 0; background: transparent; border: 0; outline: none;
+  color: var(--color-text); font: inherit; font-size: 15px;
+}
+
+/* Live thought indicator */
+@keyframes thinking-pulse { 0%, 100% { opacity: 1; } 50% { opacity: .35; } }
+.thinking-pulse { animation: thinking-pulse 1.4s ease-in-out infinite; }
+@media (prefers-reduced-motion: reduce) { .thinking-pulse { animation: none; } }

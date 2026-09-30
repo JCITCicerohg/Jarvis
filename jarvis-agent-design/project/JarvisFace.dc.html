@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="_ds/nocturne-354302b6-3043-44bc-8f37-423dc01e0aa5/styles.css">
+<script src="_ds/nocturne-354302b6-3043-44bc-8f37-423dc01e0aa5/_ds_bundle.js"></script>
+<style>html,body{margin:0;height:100%;background:var(--color-bg)}body>div,body>div>.sc-host{height:100%}</style>
+</helmet>
+<div ref="{{wrapRef}}" onPointerMove="{{onMove}}" onPointerLeave="{{onLeave}}" style="position:relative;width:100%;height:100%;min-height:160px;overflow:hidden">
+  <canvas ref="{{glRef}}" style="position:absolute;inset:0;width:100%;height:100%;display:block"></canvas>
+  <canvas ref="{{hudRef}}" style="position:absolute;inset:0;width:100%;height:100%;display:block;pointer-events:none"></canvas>
+  <sc-if value="{{showLabel}}"><div style="position:absolute;left:0;right:0;bottom:5%;display:flex;justify-content:center;font-size:11px;letter-spacing:.24em;text-transform:uppercase;color:var(--color-accent-300)">{{stateLabel}}</div></sc-if>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:640,&quot;height&quot;:640},&quot;state&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;idle&quot;,&quot;listening&quot;,&quot;thinking&quot;,&quot;speaking&quot;],&quot;default&quot;:&quot;idle&quot;,&quot;tsType&quot;:&quot;string&quot;},&quot;hud&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:true,&quot;tsType&quot;:&quot;boolean&quot;},&quot;label&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:true,&quot;tsType&quot;:&quot;boolean&quot;}}">
+const NOISE=`vec3 mod289(vec3 x){return x-floor(x*(1.0/289.0))*289.0;}
+vec4 mod289(vec4 x){return x-floor(x*(1.0/289.0))*289.0;}
+vec4 permute(vec4 x){return mod289(((x*34.0)+1.0)*x);}
+vec4 taylorInvSqrt(vec4 r){return 1.79284291400159-0.85373472095314*r;}
+float snoise(vec3 v){
+ const vec2 C=vec2(1.0/6.0,1.0/3.0);const vec4 D=vec4(0.0,0.5,1.0,2.0);
+ vec3 i=floor(v+dot(v,C.yyy));vec3 x0=v-i+dot(i,C.xxx);
+ vec3 g=step(x0.yzx,x0.xyz);vec3 l=1.0-g;vec3 i1=min(g.xyz,l.zxy);vec3 i2=max(g.xyz,l.zxy);
+ vec3 x1=x0-i1+C.xxx;vec3 x2=x0-i2+C.yyy;vec3 x3=x0-D.yyy;
+ i=mod289(i);
+ vec4 p=permute(permute(permute(i.z+vec4(0.0,i1.z,i2.z,1.0))+i.y+vec4(0.0,i1.y,i2.y,1.0))+i.x+vec4(0.0,i1.x,i2.x,1.0));
+ float n_=0.142857142857;vec3 ns=n_*D.wyz-D.xzx;
+ vec4 j=p-49.0*floor(p*ns.z*ns.z);vec4 x_=floor(j*ns.z);vec4 y_=floor(j-7.0*x_);
+ vec4 x=x_*ns.x+ns.yyyy;vec4 y=y_*ns.x+ns.yyyy;vec4 h=1.0-abs(x)-abs(y);
+ vec4 b0=vec4(x.xy,y.xy);vec4 b1=vec4(x.zw,y.zw);
+ vec4 s0=floor(b0)*2.0+1.0;vec4 s1=floor(b1)*2.0+1.0;vec4 sh=-step(h,vec4(0.0));
+ vec4 a0=b0.xzyw+s0.xzyw*sh.xxyy;vec4 a1=b1.xzyw+s1.xzyw*sh.zzww;
+ vec3 p0=vec3(a0.xy,h.x);vec3 p1=vec3(a0.zw,h.y);vec3 p2=vec3(a1.xy,h.z);vec3 p3=vec3(a1.zw,h.w);
+ vec4 norm=taylorInvSqrt(vec4(dot(p0,p0),dot(p1,p1),dot(p2,p2),dot(p3,p3)));
+ p0*=norm.x;p1*=norm.y;p2*=norm.z;p3*=norm.w;
+ vec4 m=max(0.6-vec4(dot(x0,x0),dot(x1,x1),dot(x2,x2),dot(x3,x3)),0.0);m=m*m;
+ return 42.0*dot(m*m,vec4(dot(p0,x0),dot(p1,x1),dot(p2,x2),dot(p3,x3)));
+}`;
+const VS=`uniform float uTime;uniform float uAmp;uniform float uFreq;
+varying vec3 vN;varying float vD;
+${NOISE}
+void main(){
+ vec3 n=normalize(normal);
+ float d=snoise(n*uFreq+vec3(0.0,0.0,uTime*0.6))*uAmp+snoise(n*uFreq*2.6-vec3(uTime*0.8))*uAmp*0.35;
+ vD=d;vN=normalize(normalMatrix*n);
+ gl_Position=projectionMatrix*modelViewMatrix*vec4(position+n*d,1.0);
+}`;
+const FS=`uniform vec3 uC1;uniform vec3 uC2;uniform vec3 uC3;uniform float uGlow;
+varying vec3 vN;varying float vD;
+void main(){
+ float f=pow(1.0-abs(dot(normalize(vN),vec3(0.0,0.0,1.0))),2.4);
+ vec3 c=mix(uC3,uC2,smoothstep(-0.25,0.35,vD)*0.7);
+ c+=uC1*f*(0.9+uGlow*0.6);
+ gl_FragColor=vec4(c,0.92+f*0.08);
+}`;
+const FSW=`uniform vec3 uC1;uniform float uGlow;varying vec3 vN;varying float vD;
+void main(){float f=pow(1.0-abs(dot(normalize(vN),vec3(0.0,0.0,1.0))),1.6);gl_FragColor=vec4(uC1,(0.05+f*0.22)*(0.7+uGlow*0.5));}`;
+const TARGETS={
+  idle:{amp:0.1,freq:1.1,speed:0.35,spin:0.05,bars:0.12,glow:0.2},
+  listening:{amp:0.2,freq:1.6,speed:0.7,spin:0.12,bars:0.8,glow:0.7},
+  thinking:{amp:0.16,freq:2.4,speed:1.5,spin:0.6,bars:0.3,glow:0.5},
+  speaking:{amp:0.12,freq:1.4,speed:0.8,spin:0.15,bars:1,glow:0.9}
+};
+const LABELS={idle:'Standing by',listening:'Listening',thinking:'Thinking',speaking:'Speaking'};
+
+class Component extends DCLogic {
+  wrapRef=React.createRef();glRef=React.createRef();hudRef=React.createRef();
+  cur={...TARGETS.idle};t=0;rot=0;ptr={x:0,y:0};
+  componentDidMount(){this.alive=true;this.init().catch(e=>console.warn('JarvisFace',e));}
+  componentWillUnmount(){this.alive=false;cancelAnimationFrame(this.raf);this.ro&&this.ro.disconnect();try{this.renderer&&this.renderer.dispose();}catch(e){}}
+  async init(){
+    const THREE=await import('https://unpkg.com/three@0.160.0/build/three.module.js');
+    if(!this.alive)return;
+    const el=this.wrapRef.current;const cs=getComputedStyle(el);
+    const v=n=>cs.getPropertyValue(n).trim();
+    this.css={accent:v('--color-accent'),a300:v('--color-accent-300'),a500:v('--color-accent-500'),a700:v('--color-accent-700'),n600:v('--color-neutral-600'),n700:v('--color-neutral-700'),n800:v('--color-neutral-800')};
+    const col=n=>new THREE.Color(v(n)||'#9184d9');
+    const renderer=new THREE.WebGLRenderer({canvas:this.glRef.current,antialias:true,alpha:true});
+    renderer.setPixelRatio(Math.min(devicePixelRatio,2));this.renderer=renderer;
+    const scene=new THREE.Scene();const cam=new THREE.PerspectiveCamera(35,1,0.1,100);cam.position.z=6;
+    const uni={uTime:{value:0},uAmp:{value:0.1},uFreq:{value:1.1},uGlow:{value:0.2},uC1:{value:col('--color-accent-300')},uC2:{value:col('--color-accent-600')},uC3:{value:col('--color-accent-900')}};
+    const blob=new THREE.Mesh(new THREE.IcosahedronGeometry(1,64),new THREE.ShaderMaterial({uniforms:uni,vertexShader:VS,fragmentShader:FS,transparent:true}));
+    const wire=new THREE.Mesh(new THREE.IcosahedronGeometry(1,10),new THREE.ShaderMaterial({uniforms:uni,vertexShader:VS,fragmentShader:FSW,wireframe:true,transparent:true,depthWrite:false,blending:THREE.AdditiveBlending}));
+    wire.scale.setScalar(1.12);
+    const group=new THREE.Group();group.add(blob);group.add(wire);scene.add(group);
+    this.three={THREE,scene,cam,uni,group,wire};
+    const resize=()=>{
+      const w=el.clientWidth||1,h=el.clientHeight||1;
+      renderer.setSize(w,h,false);cam.aspect=w/h;
+      const hud=this.props.hud??true;
+      const rb=Math.min(w,h)/2/(hud?2.0:1.45);
+      const tan=Math.tan((cam.fov/2)*Math.PI/180);
+      cam.position.z=h/(2*rb*tan);cam.updateProjectionMatrix();
+      const c=this.hudRef.current,dpr=Math.min(devicePixelRatio,2);
+      c.width=w*dpr;c.height=h*dpr;this.hudSize={w,h,dpr,rb};this._hud=hud;
+    };
+    this.resize=resize;resize();
+    this.ro=new ResizeObserver(resize);this.ro.observe(el);
+    let last=performance.now();
+    const loop=now=>{
+      if(!this.alive)return;
+      const dt=Math.min((now-last)/1000,0.05);last=now;
+      this.frame(dt,now/1000);
+      this.raf=requestAnimationFrame(loop);
+    };
+    this.raf=requestAnimationFrame(loop);
+  }
+  frame(dt,now){
+    const {uni,group,wire,scene,cam}=this.three;
+    const st=this.props.state??'idle';
+    if((this.props.hud??true)!==this._hud)this.resize();
+    const T=TARGETS[st]||TARGETS.idle;const k=1-Math.pow(0.02,dt);
+    for(const key in T)this.cur[key]+=(T[key]-this.cur[key])*k;
+    const c=this.cur;
+    this.t+=dt*c.speed;
+    let env=0;
+    if(st==='speaking')env=Math.abs(Math.sin(now*8.5)*Math.sin(now*2.7+1))*0.9+0.1;
+    else if(st==='listening')env=0.4+0.6*Math.abs(Math.sin(now*3.1)*Math.cos(now*1.7));
+    this.env=(this.env||0)+(env-(this.env||0))*Math.min(1,dt*14);
+    uni.uTime.value=this.t;uni.uFreq.value=c.freq;uni.uGlow.value=c.glow;
+    uni.uAmp.value=c.amp+(st==='speaking'?this.env*0.18:st==='listening'?this.env*0.06:0);
+    group.rotation.y+=dt*(0.08+c.spin*0.3);
+    group.rotation.x+=((this.ptr.y*0.35)-group.rotation.x)*Math.min(1,dt*3);
+    wire.rotation.z+=dt*0.05;
+    const s=1+Math.sin(now*0.9)*0.015;group.scale.setScalar(s);
+    this.renderer.render(scene,cam);
+    this.drawHud(dt,now);
+  }
+  drawHud(dt,now){
+    const cv=this.hudRef.current;if(!cv||!this.hudSize)return;
+    const {w,h,dpr,rb}=this.hudSize;const ctx=cv.getContext('2d');
+    ctx.setTransform(dpr,0,0,dpr,0,0);ctx.clearRect(0,0,w,h);
+    const cx=w/2,cy=h/2,col=this.css,c=this.cur;
+    const halo=ctx.createRadialGradient(cx,cy,rb*0.9,cx,cy,rb*1.9);
+    halo.addColorStop(0,col.accent);halo.addColorStop(1,'transparent');
+    ctx.globalAlpha=0.08+c.glow*0.1;ctx.fillStyle=halo;ctx.beginPath();ctx.arc(cx,cy,rb*1.9,0,Math.PI*2);ctx.fill();
+    if(!(this.props.hud??true)){ctx.globalAlpha=1;return;}
+    this.rot=(this.rot||0)+dt*c.spin;
+    ctx.lineCap='round';
+    // radial level bars
+    const N=120,r0=rb*1.2;
+    for(let i=0;i<N;i++){
+      const a=i/N*Math.PI*2-Math.PI/2;
+      const n=0.5+0.5*Math.sin(i*0.9+now*5)*Math.sin(i*0.37-now*3.3);
+      const len=rb*(0.02+c.bars*n*(0.08+(this.env||0)*0.16));
+      ctx.globalAlpha=0.25+c.bars*n*0.6;ctx.strokeStyle=i%2?col.a500:col.a300;ctx.lineWidth=1.5;
+      ctx.beginPath();ctx.moveTo(cx+Math.cos(a)*r0,cy+Math.sin(a)*r0);ctx.lineTo(cx+Math.cos(a)*(r0+len),cy+Math.sin(a)*(r0+len));ctx.stroke();
+    }
+    // accent arcs
+    const r1=rb*1.55;
+    ctx.lineWidth=2;ctx.strokeStyle=col.accent;
+    [[0,0.9],[1.3,0.35],[2.2,1.6],[4.3,0.5]].forEach(([s,l],i)=>{ctx.globalAlpha=i%2?0.45:0.9;const o=-this.rot*(i%2?1.6:1);ctx.beginPath();ctx.arc(cx,cy,r1,s+o,s+l+o);ctx.stroke();});
+    ctx.globalAlpha=0.35;ctx.lineWidth=1;ctx.strokeStyle=col.n700;ctx.beginPath();ctx.arc(cx,cy,r1-6,0,Math.PI*2);ctx.stroke();
+    // tick ring
+    const r2=rb*1.72,T=144,scan=(now*0.6)%(Math.PI*2);
+    for(let i=0;i<T;i++){
+      const a=i/T*Math.PI*2+this.rot*0.3;
+      const big=i%12===0,len=big?rb*0.07:rb*0.03;
+      const dA=Math.abs(((a-scan)%(Math.PI*2)+Math.PI*3)%(Math.PI*2)-Math.PI);
+      const hot=Math.max(0,1-dA/0.6);
+      ctx.globalAlpha=0.35+hot*0.6;ctx.strokeStyle=hot>0.05?col.a300:col.n600;ctx.lineWidth=big?1.6:1;
+      ctx.beginPath();ctx.moveTo(cx+Math.cos(a)*r2,cy+Math.sin(a)*r2);ctx.lineTo(cx+Math.cos(a)*(r2+len),cy+Math.sin(a)*(r2+len));ctx.stroke();
+    }
+    // outer ring, fading
+    const r3=rb*1.9;
+    for(let i=0;i<2;i++){ctx.globalAlpha=0.5;ctx.strokeStyle=col.n700;ctx.lineWidth=1;const s=i*Math.PI+now*0.03;ctx.beginPath();ctx.arc(cx,cy,r3,s,s+Math.PI*0.7);ctx.stroke();}
+    ctx.globalAlpha=1;
+  }
+  renderVals(){
+    const st=this.props.state??'idle';
+    return {
+      wrapRef:this.wrapRef,glRef:this.glRef,hudRef:this.hudRef,
+      showLabel:this.props.label??true,stateLabel:LABELS[st]||LABELS.idle,
+      onMove:e=>{const r=e.currentTarget.getBoundingClientRect();this.ptr={x:(e.clientX-r.left)/r.width*2-1,y:(e.clientY-r.top)/r.height*2-1};},
+      onLeave:()=>{this.ptr={x:0,y:0};}
+    };
+  }
+}
+</script>
+</body>
+</html>

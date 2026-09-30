@@ -1,0 +1,650 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="stylesheet" href="_ds/nocturne-354302b6-3043-44bc-8f37-423dc01e0aa5/styles.css">
+<script src="_ds/nocturne-354302b6-3043-44bc-8f37-423dc01e0aa5/_ds_bundle.js"></script>
+<link rel="stylesheet" href="https://unpkg.com/@phosphor-icons/web@2.1.1/src/regular/style.css">
+<style>
+html,body{margin:0;height:100%;overflow:hidden}
+a{color:var(--color-accent)} a:hover{color:var(--color-accent-400)}
+input::placeholder,textarea::placeholder{color:var(--color-neutral-600)}
+@keyframes orbBreathe{0%,100%{transform:scale(1);opacity:.88}50%{transform:scale(1.06);opacity:1}}
+@keyframes orbThink{0%{transform:rotate(0) scale(1)}50%{transform:rotate(180deg) scale(1.1)}100%{transform:rotate(360deg) scale(1)}}
+@keyframes orbListen{0%,100%{transform:scale(1)}50%{transform:scale(1.16)}}
+</style>
+</helmet>
+<div style="height:100vh;display:flex;align-items:center;justify-content:center;background:var(--color-bg);color:var(--color-text);font-family:var(--font-body)">
+<div style="position:relative;overflow:hidden;width:{{appW}};height:{{appH}};border-radius:{{appR}};box-shadow:{{appShadow}};background:radial-gradient(60% 60% at 50% 44%, var(--color-accent-900), var(--color-bg) 72%)">
+
+<sc-if value="{{notMobile}}" hint-placeholder-val="{{ true }}">
+  <div style="position:absolute;left:50%;top:44%;transform:translate(-50%,-50%);width:{{faceSize}};height:{{faceSize}}">
+    <dc-import name="JarvisFace" state="{{faceState}}" hud="{{faceHud}}" label="{{ false }}" style="width:100%;height:100%" hint-size="100%,100%"></dc-import>
+  </div>
+
+  <div style="position:absolute;top:28px;left:32px;display:flex;flex-direction:column;gap:4px">
+    <div style="font-size:11px;letter-spacing:.28em;text-transform:uppercase;color:var(--color-accent-300)">Jarvis</div>
+    <div style="font-size:34px;font-weight:500;letter-spacing:-.02em;line-height:1.1">{{clock}}</div>
+    <div style="font-size:13px;color:var(--color-neutral-400)">{{dateLine}}</div>
+  </div>
+
+  <div style="position:absolute;top:28px;right:32px;display:flex;gap:8px">
+    <sc-for list="{{fabs}}" as="f" hint-placeholder-count="4">
+    <button onClick="{{f.go}}" style="display:flex;align-items:center;gap:8px;height:40px;padding:0 14px;border:0;border-radius:var(--radius-md);background:color-mix(in srgb, var(--color-surface) 72%, transparent);backdrop-filter:blur(12px);box-shadow:var(--shadow-sm);color:var(--color-neutral-200);font:inherit;font-size:13px;cursor:pointer" style-hover="box-shadow:0 0 0 1px var(--color-accent-700);color:var(--color-accent-300)">
+      <i class="ph {{f.icon}}" style="font-size:18px"></i>{{f.label}}
+      <sc-if value="{{f.hasBadge}}"><span class="tag tag-accent" style="padding:1px 7px">{{f.badge}}</span></sc-if>
+    </button>
+    </sc-for>
+  </div>
+
+  <div style="position:absolute;left:32px;top:50%;transform:translateY(-50%);width:{{railW}};max-height:calc(100% - 260px);overflow-y:auto;overflow-x:hidden;scrollbar-width:thin;scrollbar-color:var(--color-neutral-700) transparent;display:flex;flex-direction:column;gap:8px;padding:4px">
+    <h6 style="margin:0 0 4px 2px;color:var(--color-neutral-400)">Running · {{runningCount}}</h6>
+    <sc-for list="{{runningVm}}" as="t" hint-placeholder-count="4">
+    <button onClick="{{t.open}}" style="display:flex;flex-direction:column;gap:6px;padding:10px 12px;border:0;border-radius:var(--radius-md);background:color-mix(in srgb, var(--color-surface) 62%, transparent);backdrop-filter:blur(10px);box-shadow:var(--shadow-sm);font:inherit;color:inherit;text-align:left;cursor:pointer" style-hover="box-shadow:0 0 0 1px var(--color-accent-700)">
+      <div style="display:flex;align-items:center;gap:8px"><i class="ph {{t.modeIcon}}" style="color:var(--color-accent-400)"></i><span style="flex:1;font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--color-neutral-400)">{{t.app}}</span><sc-if value="{{t.hasFix}}"><i class="ph ph-wrench" style="color:var(--color-accent-300)"></i></sc-if></div>
+      <div style="font-size:13px;font-weight:500;line-height:1.3">{{t.title}}</div>
+      <div style="font-size:12px;color:var(--color-neutral-500);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{t.current}}</div>
+      <div style="height:2px;border-radius:2px;background:var(--color-neutral-800);overflow:hidden"><div style="height:100%;width:{{t.progress}};background:var(--color-accent);transition:width .6s"></div></div>
+    </button>
+    </sc-for>
+    <sc-if value="{{hasDone}}"><button class="btn btn-ghost" onClick="{{openTasks}}" style="align-self:flex-start;font-size:12px"><i class="ph ph-check-circle"></i>{{doneLine}}</button></sc-if>
+  </div>
+
+  <div style="position:absolute;right:32px;top:50%;transform:translateY(-50%);width:{{railW}};max-height:calc(100% - 260px);overflow-y:auto;overflow-x:hidden;scrollbar-width:thin;scrollbar-color:var(--color-neutral-700) transparent;display:flex;flex-direction:column;gap:8px;padding:4px">
+    <h6 style="margin:0 0 4px 2px;color:var(--color-accent-300)">Needs your decision · {{waitingCount}}</h6>
+    <sc-for list="{{waiting}}" as="a" hint-placeholder-count="2">
+    <div style="display:flex;flex-direction:column;gap:8px;padding:12px 14px;border-radius:var(--radius-md);background:color-mix(in srgb, var(--color-surface) 72%, transparent);backdrop-filter:blur(10px);box-shadow:0 0 0 1px var(--color-accent-700), 0 0 24px color-mix(in srgb, var(--color-accent) 14%, transparent)">
+      <div class="card-kicker">{{a.risk}} · {{a.app}}</div>
+      <div style="font-size:14px;font-weight:500;line-height:1.3">{{a.action}}</div>
+      <div style="font-size:12px;color:var(--color-neutral-400)">{{a.detail}}</div>
+      <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap"><button class="btn btn-primary" onClick="{{a.approve}}" style="padding:4px 10px;font-size:13px"><i class="ph ph-check"></i>Approve</button><button class="btn btn-secondary" onClick="{{a.deny}}" style="padding:4px 10px;font-size:13px">Decline</button><button class="btn btn-ghost" onClick="{{a.open}}" style="margin-left:auto;font-size:12px">Details</button></div>
+    </div>
+    </sc-for>
+    <sc-if value="{{noWaiting}}"><div style="font-size:13px;color:var(--color-neutral-500);padding-left:2px">Nothing needs you right now.</div></sc-if>
+  </div>
+
+  <div style="position:absolute;left:32px;bottom:28px;display:flex;gap:8px">
+    <button onClick="{{openTranscript}}" style="display:flex;align-items:center;gap:8px;height:40px;padding:0 14px;border:0;border-radius:var(--radius-md);background:color-mix(in srgb, var(--color-surface) 72%, transparent);backdrop-filter:blur(12px);box-shadow:var(--shadow-sm);color:var(--color-neutral-200);font:inherit;font-size:13px;cursor:pointer" style-hover="box-shadow:0 0 0 1px var(--color-accent-700);color:var(--color-accent-300)"><i class="ph ph-chat-circle-text" style="font-size:18px"></i>Transcript<sc-if value="{{hasMsgs}}"><span class="tag tag-neutral" style="padding:1px 7px">{{msgCount}}</span></sc-if></button>
+  </div>
+  <div style="position:absolute;right:32px;bottom:28px;display:flex;gap:8px">
+    <button onClick="{{toggleSpeak}}" style="display:flex;align-items:center;gap:8px;height:40px;padding:0 14px;border:0;border-radius:var(--radius-md);background:color-mix(in srgb, var(--color-surface) 72%, transparent);backdrop-filter:blur(12px);box-shadow:var(--shadow-sm);color:var(--color-neutral-200);font:inherit;font-size:13px;cursor:pointer" style-hover="box-shadow:0 0 0 1px var(--color-accent-700);color:var(--color-accent-300)"><i class="ph {{speakIcon}}" style="font-size:18px"></i>{{speakLabel}}</button>
+  </div>
+
+  <div style="position:absolute;left:50%;bottom:28px;transform:translateX(-50%);width:min(560px, calc(100% - 440px));display:flex;flex-direction:column;align-items:center;gap:14px">
+    <div style="max-width:560px;text-align:center;font-size:17px;line-height:1.45;color:var(--color-neutral-200);text-wrap:pretty;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden">{{caption}}</div>
+    <sc-if value="{{composerVisible}}" hint-placeholder-val="{{ true }}">
+    <div style="width:100%;display:flex;align-items:center;gap:8px;padding:6px;border-radius:var(--radius-lg);background:color-mix(in srgb, var(--color-surface) 78%, transparent);backdrop-filter:blur(14px);box-shadow:var(--shadow-md)">
+      <button onClick="{{toggleMic}}" title="Talk to Jarvis" style="width:44px;height:44px;flex:none;border-radius:50%;border:1px solid var(--color-accent);background:{{micBg}};color:var(--color-accent-300);display:grid;place-items:center;cursor:pointer;box-shadow:{{micGlow}};transition:box-shadow .3s"><i class="ph {{micIcon}}" style="font-size:20px"></i></button>
+      <input value="{{input}}" onChange="{{onInput}}" onKeyDown="{{onKey}}" placeholder="{{placeholder}}" style="flex:1;min-width:0;background:transparent;border:0;outline:none;color:var(--color-text);font:inherit;font-size:15px">
+      <button class="btn btn-icon btn-primary" onClick="{{sendNow}}" disabled="{{cantSend}}" title="Send"><i class="ph ph-paper-plane-right" style="font-size:17px"></i></button>
+    </div>
+    </sc-if>
+  </div>
+</sc-if>
+
+<sc-if value="{{isMobile}}">
+<div style="position:absolute;inset:0;display:flex;flex-direction:column">
+  <div style="display:flex;align-items:center;gap:8px;padding:16px 16px 0">
+    <div style="display:flex;flex-direction:column;gap:2px"><div style="font-size:10px;letter-spacing:.28em;text-transform:uppercase;color:var(--color-accent-300)">Jarvis</div><div style="font-size:22px;font-weight:500;line-height:1.1">{{clock}}</div></div>
+    <div style="margin-left:auto;display:flex;gap:6px">
+      <sc-for list="{{fabs}}" as="f" hint-placeholder-count="4">
+      <button onClick="{{f.go}}" title="{{f.label}}" style="position:relative;width:44px;height:44px;display:grid;place-items:center;border:0;border-radius:var(--radius-md);background:color-mix(in srgb, var(--color-surface) 72%, transparent);backdrop-filter:blur(12px);box-shadow:var(--shadow-sm);color:var(--color-neutral-200);cursor:pointer"><i class="ph {{f.icon}}" style="font-size:19px"></i><sc-if value="{{f.hasBadge}}"><span style="position:absolute;top:4px;right:4px;min-width:15px;height:15px;padding:0 4px;border-radius:8px;background:var(--color-accent);color:var(--color-bg);font-size:10px;display:grid;place-items:center">{{f.badge}}</span></sc-if></button>
+      </sc-for>
+    </div>
+  </div>
+  <div style="flex:1;min-height:0;overflow:auto;display:flex;flex-direction:column;gap:16px;padding:0 16px 16px">
+    <div style="width:100%;height:280px;flex:none"><dc-import name="JarvisFace" state="{{faceState}}" hud="{{faceHud}}" label="{{ false }}" style="width:100%;height:100%" hint-size="100%,280px"></dc-import></div>
+    <div style="text-align:center;font-size:16px;line-height:1.45;color:var(--color-neutral-200);text-wrap:pretty;margin-top:-8px">{{caption}}</div>
+    <sc-if value="{{hasWaiting}}">
+    <div style="display:flex;flex-direction:column;gap:8px">
+      <h6 style="margin:0;color:var(--color-accent-300)">Needs your decision · {{waitingCount}}</h6>
+      <sc-for list="{{waiting}}" as="a" hint-placeholder-count="2">
+      <div style="display:flex;flex-direction:column;gap:8px;padding:12px 14px;border-radius:var(--radius-md);background:color-mix(in srgb, var(--color-surface) 72%, transparent);box-shadow:0 0 0 1px var(--color-accent-700), 0 0 24px color-mix(in srgb, var(--color-accent) 14%, transparent)">
+        <div class="card-kicker">{{a.risk}} · {{a.app}}</div>
+        <div style="font-size:14px;font-weight:500;line-height:1.3">{{a.action}}</div>
+        <div style="font-size:12px;color:var(--color-neutral-400)">{{a.detail}}</div>
+        <div style="display:flex;gap:6px;align-items:center"><button class="btn btn-primary" onClick="{{a.approve}}" style="min-height:40px"><i class="ph ph-check"></i>Approve</button><button class="btn btn-secondary" onClick="{{a.deny}}" style="min-height:40px">Decline</button><button class="btn btn-ghost" onClick="{{a.open}}" style="margin-left:auto;min-height:40px">Details</button></div>
+      </div>
+      </sc-for>
+    </div>
+    </sc-if>
+    <div style="display:flex;flex-direction:column;gap:8px">
+      <h6 style="margin:0;color:var(--color-neutral-400)">Running · {{runningCount}}</h6>
+      <sc-for list="{{runningVm}}" as="t" hint-placeholder-count="4">
+      <button onClick="{{t.open}}" style="display:flex;flex-direction:column;gap:6px;padding:12px 14px;border:0;border-radius:var(--radius-md);background:color-mix(in srgb, var(--color-surface) 62%, transparent);box-shadow:var(--shadow-sm);font:inherit;color:inherit;text-align:left;cursor:pointer">
+        <div style="display:flex;align-items:center;gap:8px"><i class="ph {{t.modeIcon}}" style="color:var(--color-accent-400)"></i><span style="flex:1;font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--color-neutral-400)">{{t.app}}</span><sc-if value="{{t.hasFix}}"><i class="ph ph-wrench" style="color:var(--color-accent-300)"></i></sc-if></div>
+        <div style="font-size:14px;font-weight:500;line-height:1.3">{{t.title}}</div>
+        <div style="font-size:12px;color:var(--color-neutral-500)">{{t.current}}</div>
+        <div style="height:2px;border-radius:2px;background:var(--color-neutral-800);overflow:hidden"><div style="height:100%;width:{{t.progress}};background:var(--color-accent);transition:width .6s"></div></div>
+      </button>
+      </sc-for>
+      <sc-if value="{{hasDone}}"><button class="btn btn-ghost" onClick="{{openTasks}}" style="align-self:flex-start;min-height:44px"><i class="ph ph-check-circle"></i>{{doneLine}}</button></sc-if>
+    </div>
+  </div>
+  <div style="padding:10px 16px 20px;display:flex;gap:8px;align-items:center">
+    <div style="flex:1;display:flex;align-items:center;gap:8px;padding:6px;border-radius:var(--radius-lg);background:color-mix(in srgb, var(--color-surface) 85%, transparent);box-shadow:var(--shadow-md)">
+      <button onClick="{{toggleMic}}" title="Talk to Jarvis" style="width:44px;height:44px;flex:none;border-radius:50%;border:1px solid var(--color-accent);background:{{micBg}};color:var(--color-accent-300);display:grid;place-items:center;cursor:pointer;box-shadow:{{micGlow}}"><i class="ph {{micIcon}}" style="font-size:20px"></i></button>
+      <input value="{{input}}" onChange="{{onInput}}" onKeyDown="{{onKey}}" placeholder="{{placeholder}}" style="flex:1;min-width:0;background:transparent;border:0;outline:none;color:var(--color-text);font:inherit;font-size:15px">
+      <button class="btn btn-icon btn-primary" onClick="{{sendNow}}" disabled="{{cantSend}}" style="width:44px;height:44px"><i class="ph ph-paper-plane-right" style="font-size:17px"></i></button>
+    </div>
+    <button onClick="{{openTranscript}}" title="Transcript" style="width:44px;height:44px;flex:none;display:grid;place-items:center;border:0;border-radius:var(--radius-md);background:color-mix(in srgb, var(--color-surface) 72%, transparent);box-shadow:var(--shadow-sm);color:var(--color-neutral-200);cursor:pointer"><i class="ph ph-chat-circle-text" style="font-size:19px"></i></button>
+  </div>
+</div>
+</sc-if>
+
+<div style="position:absolute;top:{{toastTop}};left:50%;transform:translateX(-50%);width:min(360px, calc(100% - 32px));display:flex;flex-direction:column;gap:8px;z-index:25;pointer-events:none">
+  <sc-for list="{{toasts}}" as="x" hint-placeholder-count="0">
+  <div style="pointer-events:auto;display:flex;gap:10px;align-items:flex-start;padding:10px 12px;border-radius:var(--radius-md);background:color-mix(in srgb, var(--color-surface) 90%, transparent);backdrop-filter:blur(12px);box-shadow:var(--shadow-md)">
+    <i class="ph {{x.icon}}" style="font-size:18px;color:var(--color-accent-400);margin-top:1px"></i>
+    <button onClick="{{x.open}}" style="flex:1;display:flex;flex-direction:column;gap:2px;padding:0;background:transparent;border:0;color:inherit;font:inherit;text-align:left;cursor:pointer"><span style="font-size:13px;font-weight:500">{{x.title}}</span><span style="font-size:12px;color:var(--color-neutral-400)">{{x.text}}</span></button>
+    <button onClick="{{x.dismiss}}" title="Dismiss" style="background:transparent;border:0;color:var(--color-neutral-500);cursor:pointer;padding:2px"><i class="ph ph-x"></i></button>
+  </div>
+  </sc-for>
+</div>
+
+<sc-if value="{{isTranscript}}">
+<aside style="position:absolute;top:0;left:0;bottom:0;width:{{sheetW}};z-index:20;display:flex;flex-direction:column;background:var(--color-surface);box-shadow:var(--shadow-lg)">
+  <div style="display:flex;align-items:center;gap:10px;padding:var(--space-4) var(--space-4) var(--space-4) var(--space-6)">
+    {{orbSm}}
+    <div style="flex:1"><div style="font-size:15px;font-weight:500">Transcript</div><div style="font-size:12px;color:var(--color-neutral-500)">{{orbLabel}}</div></div>
+    <button class="btn btn-icon btn-secondary" onClick="{{toggleSpeak}}" title="Speak replies aloud"><i class="ph {{speakIcon}}" style="font-size:17px"></i></button>
+    <button class="btn btn-icon btn-secondary" onClick="{{closePanel}}" title="Close"><i class="ph ph-x" style="font-size:17px"></i></button>
+  </div>
+  <div ref="{{msgRef}}" style="flex:1;min-height:0;overflow:auto;display:flex;flex-direction:column;gap:var(--space-4);padding:var(--space-4) var(--space-6)">
+    <sc-if value="{{noMessages}}">
+    <div style="display:flex;flex-direction:column;gap:var(--space-3)">
+      <div style="font-size:14px;color:var(--color-neutral-300)">Talk or type. Hand me work and I'll run it in the background, then check back with you before anything is sent, paid or deleted.</div>
+      <sc-for list="{{suggestions}}" as="q" hint-placeholder-count="3"><button class="btn btn-secondary" onClick="{{q.go}}" style="justify-content:flex-start;text-align:left;font-size:13px;line-height:1.35">{{q.text}}</button></sc-for>
+    </div>
+    </sc-if>
+    <sc-for list="{{msgs}}" as="m" hint-placeholder-count="0">
+      <sc-if value="{{m.isUser}}"><div style="align-self:flex-end;max-width:85%;padding:8px 12px;border-radius:var(--radius-md);background:var(--color-accent-900);box-shadow:0 0 0 1px var(--color-accent-800);font-size:14px;white-space:pre-wrap">{{m.text}}</div></sc-if>
+      <sc-if value="{{m.isJarvis}}"><div style="max-width:92%;font-size:14px;line-height:1.55;white-space:pre-wrap">{{m.text}}</div></sc-if>
+      <sc-if value="{{m.isEvent}}"><div style="display:flex;gap:6px;align-items:center;font-size:12px;color:var(--color-accent-300)"><i class="ph {{m.icon}}"></i>{{m.text}}</div></sc-if>
+    </sc-for>
+    <sc-if value="{{busy}}"><div style="font-size:13px;color:var(--color-neutral-500)">Thinking…</div></sc-if>
+  </div>
+  <div style="padding:var(--space-4)">
+    <div style="display:flex;align-items:flex-end;gap:6px;padding:6px;border-radius:var(--radius-md);background:var(--color-bg);box-shadow:var(--shadow-sm)">
+      <textarea rows="2" value="{{input}}" onChange="{{onInput}}" onKeyDown="{{onKey}}" placeholder="{{placeholder}}" style="flex:1;resize:none;background:transparent;border:0;outline:none;color:var(--color-text);font:inherit;font-size:14px;padding:6px"></textarea>
+      <button class="btn btn-icon btn-secondary" onClick="{{toggleMic}}" title="Speak"><i class="ph {{micIcon}}" style="font-size:17px"></i></button>
+      <button class="btn btn-icon btn-primary" onClick="{{sendNow}}" disabled="{{cantSend}}" title="Send"><i class="ph ph-paper-plane-right" style="font-size:17px"></i></button>
+    </div>
+  </div>
+</aside>
+</sc-if>
+
+<sc-if value="{{hasModal}}">
+<div class="dialog-backdrop" onClick="{{closePanel}}" style="position:absolute;z-index:30;padding:{{modalPad}};backdrop-filter:blur(6px)">
+  <div onClick="{{stop}}" style="width:{{modalW}};height:{{modalH}};max-height:100%;display:flex;flex-direction:column;border-radius:{{modalR}};background:var(--color-bg);box-shadow:var(--shadow-lg);overflow:hidden">
+    <div style="display:flex;align-items:center;gap:10px;padding:14px 16px 10px 24px">
+      <i class="ph {{modalIcon}}" style="font-size:18px;color:var(--color-accent-400)"></i>
+      <div style="flex:1;font-size:15px;font-weight:500">{{modalTitle}}</div>
+      <button class="btn btn-icon btn-secondary" onClick="{{closePanel}}" title="Close"><i class="ph ph-x" style="font-size:17px"></i></button>
+    </div>
+    <div style="flex:1;min-height:0;overflow:auto;padding:8px 24px 28px">
+
+      <sc-if value="{{isTaskP}}">
+      <div style="display:flex;flex-direction:column;gap:var(--space-6);min-width:0">
+        <div style="display:flex;flex-direction:column;gap:var(--space-3)">
+          <div style="display:flex;gap:6px;flex-wrap:wrap"><span class="tag tag-accent">{{d.statusLabel}}</span><span class="tag tag-neutral">{{d.app}}</span><span class="tag tag-outline" style="gap:5px"><i class="ph {{d.modeIcon}}"></i>{{d.mode}}</span></div>
+          <h3 style="margin:0;text-wrap:pretty">{{d.title}}</h3>
+          <div style="display:flex;align-items:center;gap:10px;font-size:12px;color:var(--color-neutral-500)"><div style="flex:1;max-width:360px;height:3px;border-radius:2px;background:var(--color-neutral-800);overflow:hidden"><div style="height:100%;width:{{d.progress}};background:var(--color-accent);transition:width .6s"></div></div>{{d.progress}}</div>
+        </div>
+        <sc-if value="{{d.isWaiting}}">
+        <div class="card" style="gap:var(--space-3);padding:var(--space-6);box-shadow:0 0 0 1px var(--color-accent-700), 0 0 28px color-mix(in srgb, var(--color-accent) 14%, transparent)">
+          <div class="card-kicker">Jarvis is waiting on you · {{d.risk}}</div>
+          <div class="card-title">{{d.action}}</div>
+          <div style="font-size:13px;color:var(--color-neutral-400)">{{d.detail}}</div>
+          <div style="display:flex;gap:var(--space-2)"><button class="btn btn-primary" onClick="{{d.approve}}"><i class="ph ph-check"></i>Approve</button><button class="btn btn-secondary" onClick="{{d.deny}}">Decline</button></div>
+        </div>
+        </sc-if>
+        <sc-if value="{{d.hasFix}}">
+        <div style="display:flex;gap:var(--space-4);padding:var(--space-4) var(--space-6);border-radius:var(--radius-md);background:var(--color-accent-900);box-shadow:0 0 0 1px var(--color-accent-800)">
+          <i class="ph ph-wrench" style="font-size:20px;color:var(--color-accent-400);margin-top:1px"></i>
+          <div style="display:flex;flex-direction:column;gap:2px"><div style="font-size:14px;font-weight:500">Jarvis fixed itself · {{d.fixTime}}</div><div style="font-size:13px;color:var(--color-neutral-300)">{{d.fixText}}</div></div>
+        </div>
+        </sc-if>
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(min(300px,100%),1fr));gap:var(--space-6);align-items:start">
+          <div style="display:flex;flex-direction:column;border-radius:var(--radius-md);overflow:hidden;background:var(--color-surface);box-shadow:var(--shadow-sm)">
+            <div style="display:flex;align-items:center;gap:8px;padding:8px 12px;background:var(--color-neutral-900);font-size:12px;color:var(--color-neutral-400)"><i class="ph {{d.modeIcon}}"></i><span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{d.url}}</span><span style="color:{{d.liveColor}}">{{d.liveLabel}}</span></div>
+            <div style="min-height:220px;display:flex;flex-direction:column;justify-content:flex-end;gap:var(--space-3);padding:var(--space-6)">
+              {{orbMd}}
+              <div style="font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--color-neutral-500)">{{d.nowLabel}}</div>
+              <div style="font-size:20px;line-height:1.3;text-wrap:pretty">{{d.current}}</div>
+            </div>
+          </div>
+          <div style="display:flex;flex-direction:column">
+            <h6 style="margin:0 0 var(--space-3);color:var(--color-neutral-400)">Activity</h6>
+            <sc-for list="{{d.steps}}" as="s" hint-placeholder-count="4">
+            <div style="display:grid;grid-template-columns:22px minmax(0,1fr) auto;gap:10px;padding:7px 0;align-items:start"><i class="ph {{s.icon}}" style="font-size:16px;margin-top:2px;color:{{s.color}}"></i><div style="font-size:13px;line-height:1.45;color:{{s.textColor}}">{{s.text}}</div><div style="font-size:11px;color:var(--color-neutral-600);padding-top:2px">{{s.time}}</div></div>
+            </sc-for>
+            <sc-for list="{{d.upcoming}}" as="s" hint-placeholder-count="0">
+            <div style="display:grid;grid-template-columns:22px minmax(0,1fr);gap:10px;padding:7px 0;align-items:start;color:var(--color-neutral-600)"><i class="ph ph-circle-dashed" style="font-size:16px;margin-top:2px"></i><div style="font-size:13px;line-height:1.45">{{s.text}}</div></div>
+            </sc-for>
+          </div>
+        </div>
+        <div style="display:flex;gap:var(--space-2);flex-wrap:wrap">
+          <sc-if value="{{d.canPause}}"><button class="btn btn-secondary" onClick="{{d.togglePause}}"><i class="ph {{d.pauseIcon}}"></i>{{d.pauseLabel}}</button></sc-if>
+          <button class="btn btn-secondary" onClick="{{d.ask}}"><i class="ph ph-chat-circle-text"></i>Ask about this task</button>
+        </div>
+      </div>
+      </sc-if>
+
+      <sc-if value="{{isTasksP}}">
+      <div style="display:flex;flex-direction:column;gap:2px">
+        <div class="text-muted" style="font-size:13px;margin-bottom:var(--space-3)">{{summary}}</div>
+        <sc-for list="{{allTasks}}" as="t" hint-placeholder-count="6">
+        <button onClick="{{t.open}}" style="display:flex;align-items:center;gap:12px;padding:10px 12px;border:0;border-radius:var(--radius-md);background:transparent;font:inherit;color:inherit;text-align:left;cursor:pointer" style-hover="background:color-mix(in srgb, var(--color-text) 6%, transparent)">
+          <span style="width:6px;height:6px;flex:none;border-radius:50%;background:{{t.dot}}"></span>
+          <div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:2px"><span style="font-size:14px;font-weight:500;line-height:1.3">{{t.title}}</span><span style="font-size:12px;color:var(--color-neutral-500);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{t.current}}</span></div>
+          <sc-if value="{{t.hasFix}}"><i class="ph ph-wrench" style="color:var(--color-accent-300)"></i></sc-if>
+          <span style="font-size:12px;color:var(--color-neutral-400)">{{t.statusLabel}}</span>
+        </button>
+        </sc-for>
+      </div>
+      </sc-if>
+
+      <sc-if value="{{isApprovalsP}}">
+      <div style="display:flex;flex-direction:column;gap:var(--space-8)">
+        <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;font-size:13px;color:var(--color-neutral-400)">Jarvis works on its own and asks before it can<span class="tag tag-neutral">Send</span><span class="tag tag-neutral">Pay</span><span class="tag tag-neutral">Delete</span></div>
+        <sc-if value="{{hasWaiting}}">
+        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(min(280px,100%),1fr));gap:var(--space-4)">
+          <sc-for list="{{waiting}}" as="a" hint-placeholder-count="2">
+          <div class="card" style="gap:var(--space-3);padding:var(--space-6);box-shadow:0 0 0 1px var(--color-accent-700), 0 0 28px color-mix(in srgb, var(--color-accent) 14%, transparent)">
+            <div class="card-kicker">{{a.risk}} · {{a.app}}</div>
+            <div class="card-title">{{a.action}}</div>
+            <div style="font-size:13px;color:var(--color-neutral-400)">{{a.detail}}</div>
+            <div style="font-size:12px;color:var(--color-neutral-500)">From: {{a.title}}</div>
+            <div style="display:flex;gap:var(--space-2);flex-wrap:wrap"><button class="btn btn-primary" onClick="{{a.approve}}"><i class="ph ph-check"></i>Approve</button><button class="btn btn-secondary" onClick="{{a.deny}}">Decline</button><button class="btn btn-ghost" onClick="{{a.open}}" style="margin-left:auto">View task</button></div>
+          </div>
+          </sc-for>
+        </div>
+        </sc-if>
+        <sc-if value="{{noWaiting}}"><div style="padding:var(--space-6);border-radius:var(--radius-md);background:var(--color-surface);color:var(--color-neutral-400);font-size:14px">Nothing is waiting on you. Jarvis will ask here before the next send, payment or deletion.</div></sc-if>
+        <section style="display:flex;flex-direction:column">
+          <h6 style="margin:0 0 var(--space-2);color:var(--color-neutral-400)">Decided today</h6>
+          <sc-for list="{{decisions}}" as="x" hint-placeholder-count="2">
+          <div style="display:flex;align-items:center;gap:var(--space-4);flex-wrap:wrap;padding:10px 0;background:linear-gradient(to right, transparent, var(--color-divider) 48px, var(--color-divider) calc(100% - 48px), transparent) no-repeat bottom / 100% 1px">
+            <span class="tag {{x.tag}}">{{x.label}}</span>
+            <div style="flex:1;min-width:200px;display:flex;flex-direction:column"><span style="font-size:14px">{{x.action}}</span><span style="font-size:12px;color:var(--color-neutral-500)">{{x.title}}</span></div>
+            <span style="font-size:12px;color:var(--color-neutral-500)">{{x.time}}</span>
+          </div>
+          </sc-for>
+        </section>
+      </div>
+      </sc-if>
+
+      <sc-if value="{{isMemoryP}}">
+      <div style="display:flex;flex-direction:column;gap:var(--space-6)">
+        <div style="display:flex;align-items:center;gap:var(--space-4);flex-wrap:wrap">
+          <input class="input" placeholder="Search memory" value="{{memQ}}" onChange="{{onMemQ}}" style="flex:1;min-width:200px;max-width:420px">
+          <div class="seg" style="margin-left:auto"><sc-for list="{{memModes}}" as="m" hint-placeholder-count="3"><label class="seg-opt"><input type="radio" name="memmode" checked="{{m.on}}" onChange="{{m.pick}}">{{m.label}}</label></sc-for></div>
+        </div>
+        <sc-if value="{{showGraph}}">
+        <div style="display:flex;flex-wrap:wrap;gap:var(--space-6);align-items:flex-start">
+          <div style="flex:2 1 420px;min-width:0;position:relative;height:440px;border-radius:var(--radius-md);overflow:hidden;background:radial-gradient(55% 55% at 50% 50%, var(--color-accent-900), transparent 75%), var(--color-surface);box-shadow:var(--shadow-sm)">
+            {{edgesSvg}}
+            <sc-for list="{{nodes}}" as="n" hint-placeholder-count="0">
+            <button onClick="{{n.pick}}" style="position:absolute;left:{{n.x}};top:{{n.y}};transform:translate(-50%,-50%);display:flex;flex-direction:column;align-items:center;gap:5px;padding:4px;background:transparent;border:0;color:inherit;font:inherit;cursor:pointer;opacity:{{n.op}};transition:opacity .2s">
+              <span style="width:{{n.size}};height:{{n.size}};border-radius:50%;background:{{n.fill}};box-shadow:{{n.glow}}"></span>
+              <span style="font-size:11px;white-space:nowrap;color:{{n.labelColor}}">{{n.label}}</span>
+            </button>
+            </sc-for>
+          </div>
+          <div class="card elev-sm" style="flex:1 1 260px;padding:var(--space-6);gap:var(--space-4)">
+            <div class="card-kicker">{{nd.type}}</div>
+            <div class="card-title" style="font-size:20px">{{nd.label}}</div>
+            <div style="display:flex;flex-direction:column;gap:8px">
+              <sc-for list="{{nd.facts}}" as="f" hint-placeholder-count="2"><div style="display:flex;gap:8px;font-size:13px;color:var(--color-neutral-300)"><i class="ph ph-dot-outline" style="margin-top:3px;color:var(--color-accent)"></i><span>{{f.text}}</span></div></sc-for>
+            </div>
+            <div style="display:flex;flex-direction:column;gap:6px">
+              <div style="font-size:12px;color:var(--color-neutral-500)">Connected to</div>
+              <div style="display:flex;gap:4px;flex-wrap:wrap"><sc-for list="{{nd.links}}" as="k" hint-placeholder-count="3"><button class="tag tag-neutral" onClick="{{k.pick}}" style="border:0;font:inherit;font-size:11px;cursor:pointer" style-hover="background:var(--color-neutral-700)">{{k.label}}</button></sc-for></div>
+            </div>
+            <div class="card-meta"><i class="ph ph-book-open"></i>{{nd.source}}</div>
+          </div>
+        </div>
+        </sc-if>
+        <sc-if value="{{showMemList}}">
+        <section style="display:flex;flex-direction:column">
+          <h6 style="margin:0 0 var(--space-2);color:var(--color-neutral-400)">{{memCount}}</h6>
+          <sc-for list="{{memRows}}" as="r" hint-placeholder-count="5">
+          <button onClick="{{r.pick}}" style="display:flex;gap:var(--space-4);flex-wrap:wrap;align-items:baseline;padding:10px 8px;border:0;font:inherit;color:inherit;text-align:left;cursor:pointer;background:linear-gradient(to right, transparent, color-mix(in srgb, var(--color-text) 8%, transparent) 48px, color-mix(in srgb, var(--color-text) 8%, transparent) calc(100% - 48px), transparent) no-repeat bottom / 100% 1px" style-hover="background-color:color-mix(in srgb, var(--color-text) 4%, transparent)">
+            <span style="flex:0 0 180px;font-size:14px;font-weight:500">{{r.entity}}</span>
+            <span style="flex:1;min-width:220px;font-size:13px;color:var(--color-neutral-300)">{{r.fact}}</span>
+            <span style="font-size:12px;color:var(--color-neutral-500)">{{r.source}}</span>
+          </button>
+          </sc-for>
+        </section>
+        </sc-if>
+      </div>
+      </sc-if>
+
+      <sc-if value="{{isIntegrationsP}}">
+      <div style="display:flex;flex-direction:column;gap:var(--space-8)">
+        <div class="text-muted" style="font-size:13px">Jarvis uses an API where one exists and drives the web app like a person where it doesn't.</div>
+        <sc-for list="{{integ}}" as="g" hint-placeholder-count="2">
+        <section style="display:flex;flex-direction:column;gap:var(--space-3)">
+          <h6 style="margin:0;color:var(--color-neutral-400)">{{g.g}}</h6>
+          <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(min(260px,100%),1fr));gap:var(--space-4)">
+            <sc-for list="{{g.items}}" as="it" hint-placeholder-count="3">
+            <div class="card elev-sm" style="padding:var(--space-6);gap:var(--space-3);opacity:{{it.op}}">
+              <div style="display:flex;align-items:center;gap:10px"><i class="ph {{it.icon}}" style="font-size:22px;color:var(--color-accent-400)"></i><div style="flex:1;font-size:15px;font-weight:500">{{it.name}}</div><span class="tag {{it.connTag}}">{{it.connLabel}}</span></div>
+              <div style="font-size:13px;color:var(--color-neutral-400);flex:1">{{it.desc}}</div>
+              <div style="display:flex;gap:6px;flex-wrap:wrap"><sc-for list="{{it.modes}}" as="m" hint-placeholder-count="1"><span class="tag tag-outline" style="gap:5px"><i class="ph {{m.icon}}"></i>{{m.label}}</span></sc-for></div>
+              <sc-if value="{{it.hasChoice}}"><div class="seg" style="align-self:flex-start"><sc-for list="{{it.choices}}" as="c" hint-placeholder-count="3"><label class="seg-opt" style="font-size:12px;padding:5px 10px"><input type="radio" name="{{it.id}}" checked="{{c.on}}" onChange="{{c.pick}}">{{c.label}}</label></sc-for></div></sc-if>
+              <div class="card-meta"><span style="flex:1">{{it.last}}</span><button class="btn btn-ghost" onClick="{{it.toggle}}" style="font-size:12px">{{it.toggleLabel}}</button></div>
+            </div>
+            </sc-for>
+          </div>
+        </section>
+        </sc-for>
+      </div>
+      </sc-if>
+
+    </div>
+  </div>
+</div>
+</sc-if>
+
+</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;preview&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;Desktop&quot;,&quot;Mobile&quot;],&quot;default&quot;:&quot;Desktop&quot;,&quot;tsType&quot;:&quot;string&quot;,&quot;section&quot;:&quot;Layout&quot;},&quot;hudRings&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:true,&quot;tsType&quot;:&quot;boolean&quot;,&quot;section&quot;:&quot;Face&quot;},&quot;voiceReplies&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:false,&quot;tsType&quot;:&quot;boolean&quot;,&quot;section&quot;:&quot;Voice&quot;}}">
+const S=(kind,text,time)=>({kind,text,time});
+const P=(kind,text,extra)=>({kind,text,...(extra||{})});
+const clock=()=>new Date().toLocaleTimeString([],{hour:'numeric',minute:'2-digit'});
+const KIND_ICON={browse:'ph-cursor-click',api:'ph-plugs-connected',search:'ph-magnifying-glass',think:'ph-brain',fix:'ph-wrench',approval:'ph-hand-palm',user:'ph-user-check',done:'ph-check-circle'};
+const MODE_ICON=m=>m==='Search'?'ph-magnifying-glass':m==='API'?'ph-plugs-connected':m==='Browser'?'ph-cursor-click':'ph-stack';
+const TOAST_ICON={fix:'ph-wrench',approval:'ph-hand-palm',done:'ph-check-circle',start:'ph-play-circle'};
+const seedTasks=()=>[
+{id:'t1',title:'Reconcile BevSpot inventory against Toast sales for September',app:'BevSpot + Toast',mode:'Browser + API',url:'BevSpot › Inventory › Counts',status:'running',
+ steps:[S('api','Pulled 4,812 Toast line items for Sept 1–26','9:58 AM'),S('browse','Opened BevSpot › Inventory › Counts','10:06 AM'),S('fix','BevSpot moved its Export button into the ⋯ menu. Found it and updated my selector.','10:14 AM')],
+ fix:{text:'BevSpot changed its export menu in a UI update. Jarvis located the new control, rewrote its own automation step and kept going. No action needed.',time:'10:14 AM'},
+ plan:[P('browse','Exported counts for Downtown, Eastside and Lakeview'),P('think','Matched 212 BevSpot SKUs to Toast menu items'),P('think','9 SKUs show variance above 8%'),P('api','Wrote variance sheet to SharePoint › Ops › Inventory')]},
+{id:'t2',title:'Pull M3 P&L for all locations and flag variances over 5%',app:'M3',mode:'Browser',url:'M3 › Reports › P&L › Period 9',status:'running',
+ steps:[S('browse','Signed in to M3 with stored credentials','10:02 AM'),S('browse','Opened Reports › P&L › Period 9','10:05 AM')],
+ plan:[P('browse','Downloaded Downtown P&L'),P('browse','Downloaded Eastside P&L'),P('fix','M3 session timed out mid-download. Signed back in and resumed from Lakeview.',{fixNote:'M3 logged Jarvis out during a download. It signed back in, skipped the files it already had and resumed.'}),P('browse','Downloaded Lakeview P&L'),P('think','4 lines are over budget by more than 5%'),P('api','Saved summary to Excel › Finance › P9 variance.xlsx')]},
+{id:'t3',title:'Research wine-by-the-glass pricing at 5 nearby competitors',app:'Web',mode:'Search',url:'Search › wine by the glass menus near Downtown',status:'running',
+ steps:[S('search','Found 11 candidate restaurants within 2 miles','10:09 AM'),S('browse','Reading menus (3 of 5)','10:15 AM')],
+ plan:[P('browse','Read menus (5 of 5)'),P('think','Normalized pours to 5 oz'),P('think','Our median glass is $2 above the set'),P('api','Saved findings to Memory › Wine pricing study')]},
+{id:'t4',title:'Draft weekly ops summary for leadership',app:'Outlook',mode:'API',url:'Outlook › Drafts',status:'waiting',
+ steps:[S('api','Collected notes from Teams › Ops channel','9:40 AM'),S('think','Drafted a 6-bullet summary with P8 numbers','9:47 AM'),S('approval','Waiting for your approval: Send email to leadership','9:48 AM')],
+ approval:{action:'Send email to leadership',detail:'5 recipients · Subject: Weekly ops summary, Sept 22–26',risk:'Send'},
+ plan:[P('api','Sent via Outlook'),P('api','Filed a copy to SharePoint › Ops › Weekly')]},
+{id:'t5',title:'Remove duplicate files from the Q3 vendor folder',app:'SharePoint',mode:'API',url:'SharePoint › Vendors › Q3',status:'waiting',
+ steps:[S('api','Scanned 318 files in Vendors › Q3','9:30 AM'),S('think','Found 14 exact duplicates; originals stay in place','9:34 AM'),S('approval','Waiting for your approval: Delete 14 duplicate files','9:34 AM')],
+ approval:{action:'Delete 14 duplicate files',detail:'Vendors › Q3 · recoverable from the recycle bin for 93 days',risk:'Delete'},
+ plan:[P('api','Moved 14 files to the recycle bin')]},
+{id:'t6',title:"Pay Southern Glazer's invoice #88213",app:'Vendor portal',mode:'Browser',url:'Vendor portal › Invoices › 88213',status:'running',
+ steps:[S('browse','Opened the vendor portal','10:11 AM'),S('think','Invoice matches PO 4471 and BevSpot receiving','10:13 AM')],
+ plan:[P('approval','',{approval:{action:'Pay $4,386.20',detail:"Southern Glazer's · ACH from operating account · due Sept 30",risk:'Pay'}}),P('browse','Payment submitted; confirmation saved to Drive')]},
+{id:'t7',title:'Book vendor review meetings for next week',app:'Google Calendar',mode:'API',url:'Calendar › Next week',status:'done',
+ steps:[S('api','Checked 4 calendars for open time','8:50 AM'),S('api','Held 3 slots Tue–Thu','8:52 AM'),S('user','You approved: Send 3 invites','9:05 AM'),S('done','Task complete','9:05 AM')],plan:[]},
+{id:'t8',title:'Add new vendor contacts to memory',app:'Memory',mode:'API',url:'Memory graph',status:'done',
+ steps:[S('api','Read 22 vendor emails in Gmail','8:31 AM'),S('think','Extracted 6 new contacts and 2 role changes','8:33 AM'),S('api','Linked contacts to vendors and locations','8:34 AM'),S('done','Task complete','8:34 AM')],plan:[]}
+];
+const seedInteg=()=>[
+{g:'Microsoft 365',items:[
+ {id:'outlook',name:'Outlook',icon:'ph-microsoft-outlook-logo',desc:'Read, draft and send mail. Sending asks you first.',modes:['API'],on:true,last:'Used 9:48 AM'},
+ {id:'teams',name:'Teams',icon:'ph-microsoft-teams-logo',desc:'Read channels and post updates to you.',modes:['API'],on:true,last:'Used 9:40 AM'},
+ {id:'sharepoint',name:'SharePoint & OneDrive',icon:'ph-folders',desc:'Files and folders across your sites.',modes:['API'],on:true,last:'Used 9:34 AM'},
+ {id:'excel',name:'Excel',icon:'ph-microsoft-excel-logo',desc:'Build and update workbooks.',modes:['API'],on:true,last:'Used yesterday'}]},
+{g:'Google Workspace',items:[
+ {id:'gmail',name:'Gmail',icon:'ph-envelope-simple',desc:'Read and draft mail. Sending asks you first.',modes:['API'],on:true,last:'Used 8:31 AM'},
+ {id:'gcal',name:'Calendar',icon:'ph-calendar-blank',desc:'Find time, hold slots and send invites.',modes:['API'],on:true,last:'Used 9:05 AM'},
+ {id:'drive',name:'Drive',icon:'ph-google-drive-logo',desc:'Docs, Sheets and shared folders.',modes:['API'],on:false,last:'Not connected'}]},
+{g:'Operations systems',items:[
+ {id:'m3',name:'M3',icon:'ph-browser',desc:'Accounting and P&L. No API, so Jarvis signs in and navigates like you do.',modes:['Browser'],on:true,last:'Working now'},
+ {id:'toast',name:'Toast',icon:'ph-receipt',desc:'Sales, menus and labor. API for data, browser for reports the API lacks.',modes:['API','Browser'],pref:'Both',on:true,last:'Working now'},
+ {id:'bevspot',name:'BevSpot',icon:'ph-wine',desc:'Inventory counts, orders and receiving through the web app.',modes:['Browser'],on:true,last:'Working now'}]},
+{g:'Knowledge',items:[
+ {id:'memory',name:'Memory graph',icon:'ph-graph',desc:'People, vendors, locations and systems Jarvis has learned.',modes:['API'],on:true,last:'Updated 8:34 AM'},
+ {id:'web',name:'Web research',icon:'ph-globe',desc:'Searches and reads public pages in its own browser.',modes:['Browser'],on:true,last:'Working now'}]}
+];
+const NODES=[
+{id:'n0',label:'Cicero HG',type:'Organization',x:50,y:48,facts:['Three locations: Downtown, Eastside, Lakeview','Fiscal periods run 4-4-5'],source:'Learned from SharePoint › Company'},
+{id:'n1',label:'Downtown',type:'Location',x:26,y:24,facts:['Highest wine volume of the three','Menu last repriced in June'],source:'Learned from Toast sales'},
+{id:'n2',label:'Eastside',type:'Location',x:20,y:72,facts:['Opened 2023','Counts inventory on Mondays'],source:'Learned from BevSpot'},
+{id:'n3',label:'Lakeview',type:'Location',x:48,y:86,facts:['Seasonal patio from May to September'],source:'Learned from Teams › Ops'},
+{id:'n4',label:'Toast',type:'System',x:78,y:28,facts:['POS for all three locations','API covers sales and menus; labor reports need the browser'],source:'Learned while connecting'},
+{id:'n5',label:'BevSpot',type:'System',x:80,y:62,facts:['Inventory and ordering','Export moved to the ⋯ menu on Sept 27'],source:'Learned during a task'},
+{id:'n6',label:'M3',type:'System',x:62,y:14,facts:['Accounting and P&L','Sessions time out after about 15 minutes'],source:'Learned during a task'},
+{id:'n7',label:"Southern Glazer's",type:'Vendor',x:86,y:86,facts:['Primary wine and spirits vendor','Net 30 terms, paid by ACH'],source:'Learned from Gmail'},
+{id:'n8',label:'Sysco',type:'Vendor',x:9,y:46,facts:['Broadline food vendor for Downtown and Eastside'],source:'Learned from Gmail'},
+{id:'n9',label:'Dana Ruiz',type:'Person',x:36,y:10,facts:['Controller','Wants variance flags above 5%'],source:'Learned from chat'},
+{id:'n10',label:'Marco Bell',type:'Person',x:66,y:76,facts:['Beverage director','Owns the wine list and pricing'],source:'Learned from Teams › Ops'},
+{id:'n11',label:'Q3 inventory audit',type:'Project',x:34,y:56,facts:['Due Oct 10','Covers beer, wine and spirits'],source:'Learned from Outlook'},
+{id:'n12',label:'Wine pricing study',type:'Project',x:90,y:44,facts:['Started today','Compares 5 nearby competitors'],source:'Created by Jarvis'}
+];
+const EDGES=[['n0','n1'],['n0','n2'],['n0','n3'],['n0','n4'],['n0','n5'],['n0','n6'],['n0','n9'],['n1','n4'],['n2','n4'],['n3','n4'],['n5','n10'],['n5','n7'],['n7','n10'],['n6','n9'],['n8','n1'],['n8','n2'],['n11','n5'],['n11','n10'],['n11','n9'],['n12','n10'],['n12','n1'],['n12','n4']];
+const TYPE_FILL={Organization:'var(--color-accent)',Location:'var(--color-accent-300)',System:'var(--color-neutral-300)',Vendor:'var(--color-neutral-500)',Person:'var(--color-accent-500)',Project:'var(--color-accent-700)'};
+const MODALS={task:['ph-pulse','Task'],tasks:['ph-list-checks','All tasks'],approvals:['ph-hand-palm','Approvals'],memory:['ph-graph','Memory'],integrations:['ph-plugs','Integrations']};
+
+class Component extends DCLogic {
+  state={panel:null,sel:null,messages:[],input:'',busy:false,listening:false,speak:false,orb:'idle',note:'',
+    memMode:'Both',memQ:'',node:'n0',w:window.innerWidth,h:window.innerHeight,tasks:seedTasks(),integ:seedInteg(),
+    toasts:[{id:'x0',kind:'fix',task:'t1',title:'Jarvis fixed itself',text:'BevSpot moved its Export button. I updated my automation and kept going.',at:Date.now()+4000}],
+    decisions:[{title:'Book vendor review meetings for next week',action:'Send 3 calendar invites',ok:true,time:'9:05 AM'}]};
+  msgRef=React.createRef();
+  componentDidMount(){
+    this.setState({speak:!!this.props.voiceReplies});
+    this.iv=setInterval(()=>this.tick(),3000);
+    this.clk=setInterval(()=>this.forceUpdate(),15000);
+    this.onR=()=>this.setState({w:window.innerWidth,h:window.innerHeight});
+    this.onK=e=>{if(e.key==='Escape'&&this.state.panel)this.setState({panel:null});};
+    window.addEventListener('resize',this.onR);window.addEventListener('keydown',this.onK);
+  }
+  componentWillUnmount(){clearInterval(this.iv);clearInterval(this.clk);window.removeEventListener('resize',this.onR);window.removeEventListener('keydown',this.onK);try{this.rec&&this.rec.abort();}catch(e){}try{speechSynthesis.cancel();}catch(e){}}
+  componentDidUpdate(){
+    const s=this.state,key=s.messages.length+'|'+s.busy+'|'+s.panel;
+    if(key!==this._scrollKey){this._scrollKey=key;const el=this.msgRef.current;if(el)el.scrollTop=el.scrollHeight;}
+    const vr=!!(this.props&&this.props.voiceReplies);
+    if(this._vr!==undefined&&vr!==this._vr)this.setState({speak:vr});
+    this._vr=vr;
+  }
+  tick(){
+    this.setState(s=>{
+      let changed=false;const fresh=[];
+      const tasks=s.tasks.map(t=>{
+        if(t.status!=='running'||t.paused||!t.plan.length||Math.random()<0.35)return t;
+        changed=true;
+        const [n,...rest]=t.plan;
+        if(n.kind==='approval'){fresh.push({kind:'approval',task:t.id,title:'Needs your decision',text:n.approval.action});return {...t,plan:rest,status:'waiting',approval:n.approval,steps:[...t.steps,S('approval','Waiting for your approval: '+n.approval.action,clock())]};}
+        const nt={...t,plan:rest,steps:[...t.steps,S(n.kind,n.text,clock())]};
+        if(n.kind==='fix'){nt.fix={text:n.fixNote||n.text,time:clock()};fresh.push({kind:'fix',task:t.id,title:'Jarvis fixed itself',text:n.text});}
+        if(!rest.length){nt.status='done';nt.steps=[...nt.steps,S('done','Task complete',clock())];fresh.push({kind:'done',task:t.id,title:'Task complete',text:t.title});}
+        return nt;
+      });
+      const now=Date.now();
+      const kept=s.toasts.filter(x=>now-x.at<8000);
+      if(!changed&&kept.length===s.toasts.length)return null;
+      return {tasks:changed?tasks:s.tasks,toasts:[...fresh.map((x,i)=>({...x,id:now+'-'+i,at:now})),...kept].slice(0,2)};
+    });
+  }
+  toast(x){const now=Date.now();this.setState(s=>({toasts:[{...x,id:now+'t',at:now},...s.toasts].slice(0,2)}));}
+  decide(id,ok){
+    this.setState(s=>{
+      const t=s.tasks.find(x=>x.id===id);
+      if(!t||t.status!=='waiting'||!t.approval)return null;
+      const a=t.approval;
+      let plan=ok?t.plan:t.plan.slice(1);
+      let steps=[...t.steps,S('user',(ok?'You approved: ':'You declined: ')+a.action,clock())];
+      let status='running';
+      if(!plan.length){status='done';steps=[...steps,S('done','Task complete',clock())];}
+      return {tasks:s.tasks.map(x=>x.id===id?{...x,plan,steps,status,approval:null}:x),decisions:[{title:t.title,action:a.action,ok,time:clock()},...s.decisions]};
+    });
+  }
+  startTask(i){
+    const id='t'+Date.now().toString(36);
+    const mode=i.mode||'Browser';
+    const kind=mode==='Search'?'search':mode==='API'?'api':'browse';
+    const steps=(i.steps||[]).slice(0,6);
+    const plan=steps.map((txt,k)=>P(k===steps.length-2?'think':kind,txt));
+    if(i.risky_action)plan.splice(Math.max(plan.length-1,0),0,P('approval','',{approval:{action:i.risky_action,detail:'Requested by voice or chat · Jarvis will do this only after you approve',risk:/pay/i.test(i.risky_action)?'Pay':/delet|remov/i.test(i.risky_action)?'Delete':'Send'}}));
+    const t={id,title:i.title,app:i.app||'Jarvis',mode,url:(i.app||'Jarvis')+' › '+i.title,status:'running',steps:[S('think','Planned '+plan.length+' steps from your request',clock())],plan};
+    this.setState(s=>({tasks:[t,...s.tasks],messages:[...s.messages,{role:'event',icon:'ph-play-circle',text:'Started task: '+i.title}]}));
+    this.toast({kind:'start',task:id,title:'Started a task',text:i.title});
+    return 'Started task '+id;
+  }
+  say(text){
+    if(!this.state.speak||!window.speechSynthesis)return;
+    try{speechSynthesis.cancel();const u=new SpeechSynthesisUtterance(text);u.rate=1.05;u.onend=()=>this.setState({orb:'idle'});this.setState({orb:'speaking'});speechSynthesis.speak(u);}catch(e){}
+  }
+  async send(raw){
+    const text=(raw??this.state.input).trim();
+    if(!text||this.state.busy)return;
+    const msgs=[...this.state.messages,{role:'user',text}];
+    this.setState({messages:msgs,input:'',busy:true,orb:'thinking',note:''});
+    const ts=this.state.tasks.map(t=>`- [${t.id}] ${t.title} — ${t.paused?'paused':t.status}${t.status==='waiting'&&t.approval?` (needs approval: ${t.approval.action})`:''}; last step: ${(t.steps[t.steps.length-1]||{}).text}`).join('\n');
+    const system=`You are Jarvis, a personal AI agent for the Cicero team. You do the heavy analytical work — browsing the computer, using connected systems (Microsoft 365, Google Workspace, M3 accounting via browser automation, Toast POS via API or browser, BevSpot inventory via browser, a memory graph, and web research) — while the user makes decisions. You fix your own automation when a site changes. You ask for approval only before sending, paying or deleting.
+Your replies are often spoken aloud and shown as a caption: plain text, 1–2 short sentences, no markdown. When the user asks for work, call start_task (do not ask clarifying questions unless essential). When they approve or decline a pending action, call decide. Use the task list below to answer status questions. Current time: ${clock()}.
+
+Current tasks:
+${ts}`;
+    const tools=[
+      {name:'start_task',description:'Start an autonomous background task that Jarvis runs and logs step by step.',input_schema:{type:'object',properties:{title:{type:'string',description:'Short imperative title'},app:{type:'string',description:'Main system, e.g. Toast, BevSpot, M3, Outlook, Web'},mode:{type:'string',enum:['Browser','API','Search','Browser + API']},steps:{type:'array',items:{type:'string'},description:'4–6 concrete steps written as completed log lines, e.g. "Opened BevSpot › Inventory › Counts"'},risky_action:{type:'string',description:'Only if the task ends in sending, paying or deleting: a short label like "Send email to Dana"'}},required:['title','app','mode','steps']},run:async(i)=>this.startTask(i)},
+      {name:'decide',description:'Approve or decline a pending action on a waiting task.',input_schema:{type:'object',properties:{task_id:{type:'string'},approve:{type:'boolean'}},required:['task_id','approve']},run:async(i)=>{this.decide(i.task_id,!!i.approve);return 'Recorded';}}
+    ];
+    let reply;
+    try{
+      reply=await window.claude.complete({system,max_tokens:700,tools,messages:msgs.filter(m=>m.role!=='event').slice(-12).map(m=>({role:m.role,content:m.text}))});
+      reply=(reply||'').trim()||'Done.';
+    }catch(e){reply="I couldn't reach the model just now. Try again in a moment.";}
+    this.setState(s=>({messages:[...s.messages,{role:'assistant',text:reply}],busy:false,orb:'idle'}));
+    this.say(reply);
+  }
+  toggleMic(){
+    if(this.state.listening){try{this.rec&&this.rec.stop();}catch(e){}return;}
+    const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
+    if(!SR){this.setState({note:"Voice input isn't available in this browser. Type instead."});return;}
+    const r=new SR();r.lang='en-US';r.interimResults=true;
+    let finalText='';
+    r.onresult=e=>{const txt=Array.from(e.results).map(x=>x[0].transcript).join('');this.setState({input:txt});if(e.results[e.results.length-1].isFinal)finalText=txt;};
+    r.onerror=e=>this.setState({note:e.error==='not-allowed'?'Microphone access was blocked. Type instead.':'Voice input stopped: '+e.error});
+    r.onend=()=>{this.setState({listening:false,orb:this.state.busy?'thinking':'idle'});if(finalText)this.send(finalText);};
+    this.rec=r;
+    try{r.start();this.setState({listening:true,orb:'listening',note:''});}catch(e){}
+  }
+  orb(size){
+    const st=this.state.orb;
+    const anim=st==='thinking'?'orbThink 1.6s linear infinite':st==='listening'?'orbListen .9s ease-in-out infinite':st==='speaking'?'orbListen 1.4s ease-in-out infinite':'orbBreathe 5s ease-in-out infinite';
+    return React.createElement('div',{style:{width:size,height:size,flex:'none',borderRadius:'50%',background:'radial-gradient(circle at 34% 30%, var(--color-accent-200), var(--color-accent-500) 36%, var(--color-accent-800) 72%, var(--color-accent-900))',boxShadow:`0 0 ${Math.round(size*0.55)}px color-mix(in srgb, var(--color-accent) ${st==='idle'?28:55}%, transparent)`,animation:anim}});
+  }
+  setIntegration(id,patch){this.setState(s=>({integ:s.integ.map(g=>({...g,items:g.items.map(it=>it.id===id?{...it,...patch}:it)}))}));}
+  renderVals(){
+    const s=this.state,p=this.props;
+    const framed=(p.preview??'Desktop')==='Mobile';
+    const isMobile=framed||s.w<760;
+    const tasks=s.tasks;
+    const running=tasks.filter(t=>t.status==='running'),waiting=tasks.filter(t=>t.status==='waiting'),done=tasks.filter(t=>t.status==='done');
+    const openTask=id=>this.setState({sel:id,panel:'task'});
+    const vm=t=>{
+      const last=t.steps[t.steps.length-1]||{};
+      const prog=t.status==='done'?100:Math.round(100*t.steps.length/(t.steps.length+t.plan.length+1));
+      return {id:t.id,title:t.title,app:t.app,mode:t.mode,modeIcon:MODE_ICON(t.mode),
+        current:t.status==='waiting'&&t.approval?'Waiting for you: '+t.approval.action:last.text,
+        progress:prog+'%',statusLabel:t.paused?'Paused':{running:'Running',waiting:'Needs you',done:'Done'}[t.status],
+        dot:t.status==='waiting'?'var(--color-accent-300)':t.status==='done'?'var(--color-neutral-600)':t.paused?'var(--color-neutral-500)':'var(--color-accent)',
+        hasFix:!!t.fix,fixTime:t.fix&&t.fix.time,fixText:t.fix&&t.fix.text,isWaiting:t.status==='waiting',
+        action:t.approval&&t.approval.action,detail:t.approval&&t.approval.detail,risk:t.approval&&t.approval.risk,
+        open:()=>openTask(t.id),approve:()=>this.decide(t.id,true),deny:()=>this.decide(t.id,false)};
+    };
+    const selT=tasks.find(t=>t.id===s.sel);
+    let d={};
+    if(selT){
+      const v=vm(selT);const n=selT.steps.length;
+      d={...v,url:selT.url,
+        steps:selT.steps.map((x,k)=>({icon:KIND_ICON[x.kind]||'ph-dot',text:x.text,time:x.time,
+          color:x.kind==='fix'?'var(--color-accent-400)':(x.kind==='approval'||x.kind==='user')?'var(--color-accent-300)':k===n-1&&selT.status==='running'?'var(--color-accent)':'var(--color-neutral-500)',
+          textColor:k===n-1?'var(--color-text)':'var(--color-neutral-300)'})),
+        upcoming:selT.plan.map(x=>({text:x.kind==='approval'?'Ask you: '+x.approval.action:x.text})),
+        nowLabel:selT.status==='waiting'?'Paused for your decision':selT.status==='done'?'Finished':selT.paused?'Paused':'Now',
+        liveLabel:selT.status==='running'&&!selT.paused?'● Live':selT.status==='done'?'Ended':'Holding',
+        liveColor:selT.status==='running'&&!selT.paused?'var(--color-accent)':'var(--color-neutral-500)',
+        canPause:selT.status==='running',pauseLabel:selT.paused?'Resume':'Pause',pauseIcon:selT.paused?'ph-play':'ph-pause',
+        togglePause:()=>this.setState(st=>({tasks:st.tasks.map(x=>x.id===selT.id?{...x,paused:!x.paused}:x)})),
+        ask:()=>this.setState({panel:'transcript',input:`About "${selT.title}": `})};
+    }
+    const q=s.memQ.trim().toLowerCase();
+    const match=n=>!q||(n.label+' '+n.type+' '+n.facts.join(' ')).toLowerCase().includes(q);
+    const linked=new Set(EDGES.filter(e=>e.includes(s.node)).flat());
+    const nodes=NODES.map(n=>{const sel=n.id===s.node;return {id:n.id,label:n.label,x:n.x+'%',y:n.y+'%',size:n.type==='Organization'?'18px':'11px',fill:TYPE_FILL[n.type],
+      glow:sel?'0 0 0 4px color-mix(in srgb, var(--color-accent) 30%, transparent), 0 0 18px var(--color-accent)':'none',
+      labelColor:sel?'var(--color-text)':linked.has(n.id)?'var(--color-neutral-200)':'var(--color-neutral-500)',op:match(n)?1:0.25,pick:()=>this.setState({node:n.id})};});
+    const pos=Object.fromEntries(NODES.map(n=>[n.id,n]));
+    const edgesSvg=React.createElement('svg',{viewBox:'0 0 100 100',preserveAspectRatio:'none',style:{position:'absolute',inset:0,width:'100%',height:'100%'}},
+      EDGES.map(([a,b])=>{const on=a===s.node||b===s.node;return React.createElement('line',{key:a+b,x1:pos[a].x,y1:pos[a].y,x2:pos[b].x,y2:pos[b].y,stroke:on?'var(--color-accent)':'var(--color-neutral-700)',strokeWidth:on?1.4:1,strokeOpacity:on?0.9:0.6,vectorEffect:'non-scaling-stroke'});}));
+    const cur=pos[s.node];
+    const nd={type:cur.type,label:cur.label,facts:cur.facts.map(text=>({text})),source:cur.source,
+      links:[...linked].filter(x=>x!==s.node).map(x=>({label:pos[x].label,pick:()=>this.setState({node:x})}))};
+    const memRows=NODES.filter(match).flatMap(n=>n.facts.map(f=>({entity:n.label,fact:f,source:n.source,pick:()=>this.setState({node:n.id,memMode:s.memMode==='List'?'Both':s.memMode})})));
+    const integ=s.integ.map(g=>({g:g.g,items:g.items.map(it=>({...it,op:it.on?1:0.6,connTag:it.on?'tag-accent':'tag-neutral',connLabel:it.on?'Connected':'Off',
+      modes:it.modes.map(m=>({label:m==='API'?'API':'Browser automation',icon:m==='API'?'ph-plugs-connected':'ph-cursor-click'})),
+      hasChoice:it.modes.length>1,choices:['API first','Browser only','Both'].map(c=>({label:c,on:(it.pref||'Both')===c,pick:()=>this.setIntegration(it.id,{pref:c})})),
+      toggleLabel:it.on?'Disconnect':'Connect',toggle:()=>this.setIntegration(it.id,{on:!it.on,last:it.on?'Not connected':'Connected just now'})}))}));
+    const now=new Date(),hr=now.getHours();
+    const greet=hr<12?'Good morning.':hr<18?'Good afternoon.':'Good evening.';
+    const lastReply=[...s.messages].reverse().find(m=>m.role==='assistant');
+    const caption=s.note||(s.listening?(s.input||'Listening…'):s.busy?'Thinking…':lastReply?lastReply.text:
+      `${greet} ${waiting.length?`${waiting.length} decision${waiting.length===1?' is':'s are'} waiting on you`:'Nothing needs you right now'}, and ${running.length} task${running.length===1?' is':'s are'} running.`);
+    const panel=s.panel;
+    const modal=panel&&panel!=='transcript'&&(panel!=='task'||selT)?panel:null;
+    const wide=modal==='memory'||modal==='integrations';
+    const fabs=[{id:'tasks',label:'Tasks',icon:'ph-list-checks'},{id:'approvals',label:'Approvals',icon:'ph-hand-palm',badge:waiting.length},{id:'memory',label:'Memory',icon:'ph-graph'},{id:'integrations',label:'Apps',icon:'ph-plugs'}]
+      .map(f=>({...f,hasBadge:!!f.badge,go:()=>this.setState({panel:f.id})}));
+    return {
+      appW:framed?'390px':'100vw',appH:framed?'min(844px, calc(100vh - 32px))':'100vh',appR:framed?'28px':'0',appShadow:framed?'var(--shadow-lg)':'none',
+      isMobile,notMobile:!isMobile,
+      faceState:s.listening?'listening':s.busy?'thinking':s.orb==='speaking'?'speaking':'idle',faceHud:p.hudRings??true,
+      faceSize:Math.round(Math.max(260,Math.min(s.h*0.62,s.w-620,680)))+'px',
+      railW:s.w<1180?'240px':'290px',
+      clock:clock(),dateLine:now.toLocaleDateString([],{weekday:'long',month:'long',day:'numeric'}),
+      fabs,orbSm:this.orb(22),orbMd:this.orb(34),
+      orbLabel:s.listening?'Listening':s.busy?'Thinking':s.orb==='speaking'?'Speaking':`${running.length} running · ${waiting.length} need you`,
+      runningVm:running.map(vm),runningCount:running.length,waiting:waiting.map(vm),waitingCount:waiting.length,
+      hasWaiting:waiting.length>0,noWaiting:waiting.length===0,hasDone:done.length>0,doneLine:`${done.length} done today`,
+      allTasks:[...waiting,...running,...done].map(vm),summary:`${running.length} running · ${waiting.length} need you · ${done.length} done today`,
+      openTasks:()=>this.setState({panel:'tasks'}),openTranscript:()=>this.setState({panel:'transcript'}),
+      closePanel:()=>this.setState({panel:null}),stop:e=>e.stopPropagation(),
+      hasMsgs:s.messages.length>0,msgCount:s.messages.filter(m=>m.role!=='event').length,
+      speakIcon:s.speak?'ph-speaker-high':'ph-speaker-slash',speakLabel:s.speak?'Voice replies on':'Voice replies off',
+      toggleSpeak:()=>{if(s.speak){try{speechSynthesis.cancel();}catch(e){}}this.setState({speak:!s.speak,orb:'idle'});},
+      caption,composerVisible:panel!=='transcript',
+      micIcon:s.listening?'ph-stop':'ph-microphone',micBg:s.listening?'color-mix(in srgb, var(--color-accent) 22%, transparent)':'transparent',
+      micGlow:s.listening?'0 0 28px color-mix(in srgb, var(--color-accent) 60%, transparent)':'0 0 14px color-mix(in srgb, var(--color-accent) 22%, transparent)',
+      toggleMic:()=>this.toggleMic(),
+      input:s.input,onInput:e=>this.setState({input:e.target.value}),
+      onKey:e=>{if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();this.send();}},
+      sendNow:()=>this.send(),cantSend:s.busy||!s.input.trim(),
+      placeholder:s.listening?'Listening…':'Ask Jarvis or hand off a task',
+      toastTop:isMobile?'76px':'84px',
+      toasts:s.toasts.map(x=>({...x,icon:TOAST_ICON[x.kind],open:()=>{openTask(x.task);},dismiss:()=>this.setState(st=>({toasts:st.toasts.filter(y=>y.id!==x.id)}))})),
+      isTranscript:panel==='transcript',sheetW:isMobile?'100%':'400px',
+      msgRef:this.msgRef,noMessages:!s.messages.length,busy:s.busy,
+      msgs:s.messages.map(m=>({...m,isUser:m.role==='user',isJarvis:m.role==='assistant',isEvent:m.role==='event'})),
+      suggestions:['Compare last week’s BevSpot usage to Toast sales at Eastside','What needs my decision right now?','Research happy hour pricing at 3 competitors near Lakeview'].map(text=>({text,go:()=>this.send(text)})),
+      hasModal:!!modal,modalIcon:modal?MODALS[modal][0]:'',modalTitle:modal==='task'&&selT?selT.app:modal?MODALS[modal][1]:'',
+      modalW:isMobile?'100%':wide?'min(1120px, 100%)':modal==='task'?'min(920px, 100%)':'min(720px, 100%)',
+      modalH:isMobile?'100%':wide?'88%':'auto',modalR:isMobile?'0':'var(--radius-lg)',modalPad:isMobile?'0':'32px',
+      isTaskP:modal==='task',isTasksP:modal==='tasks',isApprovalsP:modal==='approvals',isMemoryP:modal==='memory',isIntegrationsP:modal==='integrations',
+      d,
+      memModes:['Graph','List','Both'].map(m=>({label:m,on:s.memMode===m,pick:()=>this.setState({memMode:m})})),
+      memQ:s.memQ,onMemQ:e=>this.setState({memQ:e.target.value}),showGraph:s.memMode!=='List',showMemList:s.memMode!=='Graph',
+      nodes,edgesSvg,nd,memRows,memCount:`${memRows.length} facts`,
+      decisions:s.decisions.map(x=>({...x,label:x.ok?'Approved':'Declined',tag:x.ok?'tag-accent':'tag-neutral'})),
+      integ
+    };
+  }
+}
+</script>
+</body>
+</html>
