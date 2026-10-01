@@ -6,6 +6,7 @@ import { createEmbedder, createPlanner } from './llm/factory.ts';
 import { LocalBlobStore } from './store/blob.ts';
 import { GraphClient } from './sync/graph.ts';
 import { syncSource } from './sync/runner.ts';
+import { scheduleSync } from './schedule.ts';
 
 const env = loadEnv();
 if (!env.apiKeys.size) throw new Error('KB_API_KEYS is empty; set at least one name:key pair in .env');
@@ -32,5 +33,5 @@ const syncNow = (only?: string) => (running ??= syncAll(only).finally(() => { ru
 
 createApp({ db, gen, blob, embedder, planner, apiKeys: env.apiKeys, sources, graph, syncNow })
   .listen(env.port, () => console.log(`kb-service on http://localhost:${env.port} (generation ${gen})`));
-void syncNow();
-setInterval(() => void syncNow(), env.syncMinutes * 60_000);
+const runSync = () => void syncNow();
+if (!scheduleSync(env.syncMinutes, runSync)) console.log('Scheduled sync is off (SYNC_MINUTES=0); POST /v1/sync triggers it.');

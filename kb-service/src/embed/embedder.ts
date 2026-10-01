@@ -6,7 +6,8 @@ export interface Embedder { model: string; dim: number; embed(texts: string[]): 
 export type Extractor = (texts: string[], opts: { pooling: 'cls' | 'mean'; normalize: boolean }) => Promise<{ tolist(): number[][] }>;
 
 const loadBgeSmall = async (): Promise<Extractor> => {
-  const { pipeline } = await import('@huggingface/transformers');
+  const { pipeline, env } = await import('@huggingface/transformers');
+  if (process.env.HF_CACHE_DIR) env.cacheDir = process.env.HF_CACHE_DIR;
   return (await pipeline('feature-extraction', 'Xenova/bge-small-en-v1.5')) as unknown as Extractor;
 };
 
