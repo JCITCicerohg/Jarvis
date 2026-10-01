@@ -46,5 +46,6 @@ describe('do-deploy helpers', () => {
     expect(s).toContain('createdb -U kb kb_test');
     expect(s).toContain('grep -q "^KB_TEST_ENABLED=1" deploy/.env');
     expect(s).toContain('--profile test up -d --build kb-test');
+    expect(s.indexOf('up -d --build')).toBeLessThan(s.indexOf('createdb -U kb kb_test'));
   });
 });

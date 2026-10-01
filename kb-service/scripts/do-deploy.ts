@@ -42,8 +42,8 @@ export function remoteScript(): string {
     'mv -f kb.env deploy/kb.env && mv -f dot-env deploy/.env',
     'chmod 600 deploy/.env deploy/kb.env',
     'dc="docker compose -f deploy/docker-compose.yml --env-file deploy/.env"',
-    '$dc exec -T db psql -U kb -tAc "SELECT 1 FROM pg_database WHERE datname=\'kb_test\'" | grep -q 1 || $dc exec -T db createdb -U kb kb_test',
     'docker compose -f deploy/docker-compose.yml --env-file deploy/.env up -d --build',
+    '$dc exec -T db psql -U kb -tAc "SELECT 1 FROM pg_database WHERE datname=\'kb_test\'" | grep -q 1 || $dc exec -T db createdb -U kb kb_test',
     'if grep -q "^KB_TEST_ENABLED=1" deploy/.env; then $dc --profile test up -d --build kb-test; fi',
     'bash deploy/n8n-setup.sh',
   ].join('\n');
