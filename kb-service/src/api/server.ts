@@ -101,7 +101,7 @@ export function createApp(d: AppDeps) {
     const gen = qd.gen;
     const s = gschema(gen);
     const counts = (await d.queryDb.query(`SELECT source_id, status, count(*)::int n FROM ${s}.documents GROUP BY 1, 2`)).rows;
-    const state = (await d.db.query('SELECT * FROM kb_meta.sync_state')).rows;
+    const state = (await d.queryDb.query('SELECT * FROM kb_meta.sync_state')).rows;
     const errors = (await d.queryDb.query(`SELECT source_id, name, path, error FROM ${s}.documents WHERE status = 'error' ORDER BY id DESC LIMIT 10`)).rows;
     res.json({
       generation: gen,
