@@ -1,6 +1,6 @@
 # Jarvis Knowledge Base: SharePoint → DigitalOcean RAG — Design
 
-Date: 2026-09-30 · Status: draft for review (rev 3: + corrections layer)
+Date: 2026-09-30 · Status: approved (rev 4: single-Droplet deployment)
 
 ## 1. Goal
 
@@ -296,12 +296,13 @@ Throwaway scripts against the real site to confirm:
 6. Samples of Labor Summary, Inventory and Stay Experience to design their normalizers/extractors.
 7. pgvector version on DO Managed PostgreSQL 16 (iterative index scan support).
 
-## 15. Infrastructure and rough cost
-- Droplet (n8n + kb-service blue/green + kb-test + Caddy), 8 GB RAM: ~$48/mo.
-- DO Managed PostgreSQL 16, 4 GB (room for two generations + test DB): ~$60/mo.
-- Spaces: $5/mo (250 GB).
-- Embeddings + Haiku enrichment/planning: initial Hilton backfill ~$5–15; ongoing a few dollars/month.
-Prices approximate; confirm at provisioning.
+## 15. Infrastructure and rough cost (rev 4: single Droplet, owner-approved 2026-10-01)
+- One DigitalOcean Droplet, 4 GB RAM / 2 vCPU, region nyc3: ~$24/mo. Docker Compose runs Postgres 16 + pgvector, kb-service (and kb-test, Plan 3), n8n and Caddy.
+- Replaces Managed PostgreSQL and Spaces: the database runs in a container with a persistent volume; originals and Parquet live on the Droplet disk (`BlobStore` local implementation). Nightly `pg_dump` + blob tarball to the Droplet disk; DO weekly Droplet backups optional (+20%).
+- HTTPS via Caddy on `<ip>.sslip.io` hostnames (no domain needed): `kb.<ip>.sslip.io` (query API), `n8n.<ip>.sslip.io` (n8n editor, own login).
+- Embeddings run locally (bge-small, free); the planner uses Haiku (cents per day).
+- n8n is the scheduler and alerting layer: every 5 minutes it calls kb-service `POST /v1/sync`, which runs the Graph delta (§5.2 steps 2–6 run inside kb-service); failures notify via n8n.
+- Upgrade path when needed: resize the Droplet, or move Postgres to Managed PostgreSQL and blobs to Spaces (the `BlobStore` interface already isolates storage).
 
 ## 16. Phase 2 (not in this build)
 Department/hotel access scopes on API keys; more hotels as sources; Graph change-notification webhook for sub-5-minute latency; automatic cutover once the gate passes; more named normalizers/extractors as datasets recur.
