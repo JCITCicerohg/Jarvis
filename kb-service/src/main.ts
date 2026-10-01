@@ -7,6 +7,7 @@ import { embedderFor } from './embed/registry.ts';
 import { loadEvalRows } from './eval/score.ts';
 import { GenerationManager } from './gen/manager.ts';
 import { createEmbedder, createPlanner } from './llm/factory.ts';
+import { expireCorrections } from './corrections/store.ts';
 import { scheduleSync } from './schedule.ts';
 import { LocalBlobStore } from './store/blob.ts';
 import { GraphClient } from './sync/graph.ts';
@@ -49,3 +50,4 @@ createApp({ db, blob, apiKeys: env.apiKeys, adminKeys: env.adminKeys, sources, g
 const runSync = () => void syncNow();
 if (!scheduleSync(env.syncMinutes, runSync)) console.log('Scheduled sync is off (SYNC_MINUTES=0); POST /v1/sync triggers it.');
 setInterval(() => { gens.dropExpired().then(ids => ids.length && console.log('dropped expired generations', ids)).catch(e => console.error('dropExpired failed:', e)); }, 24 * 60 * 60_000);
+setInterval(() => { expireCorrections(db).then(r => (r.expired || r.review) && console.log('corrections expired/review', r)).catch(e => console.error('expireCorrections failed:', e)); }, 24 * 60 * 60_000);
