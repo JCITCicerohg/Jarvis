@@ -2,11 +2,16 @@ import type { SourceConfig } from '../config.ts';
 import { gschema } from '../db/migrate.ts';
 import { deleteItem, findDocument, ingestFile, upsertFolder, type IngestDeps } from '../ingest/pipeline.ts';
 import { GraphError, type GraphItem, type GraphLike } from './graph.ts';
+import type { Pacer } from './pacer.ts';
 
 export { GraphError, type DeltaPage, type GraphItem, type GraphLike } from './graph.ts';
 
 export const MAX_BYTES = 100 * 1024 * 1024;
+export const SLOW_AFTER_FILES = 200;
+export const SLOW_SHARE = 0.1;
+export const SLOW_MIN_DOCS = 100;
 export interface SyncSummary { indexed: number; unchanged: number; skipped: number; errors: number; deleted: number; folders: number; resync: boolean }
+export interface SyncDeps extends IngestDeps { graph: GraphLike; extra?: IngestDeps[]; pacer?: Pacer }
 
 /** The item's own path segments relative to the source root, or null if it is outside the root. */
 export function relSegments(src: SourceConfig, item: GraphItem): string[] | null {
@@ -32,8 +37,12 @@ async function saveState(d: IngestDeps, sourceId: string, fields: { delta_link?:
   );
 }
 
-export async function syncSource(d: IngestDeps & { graph: GraphLike }, src: SourceConfig): Promise<SyncSummary> {
+export async function syncSource(d: SyncDeps, src: SourceConfig): Promise<SyncSummary> {
   const s = gschema(d.gen);
+  const all: IngestDeps[] = [d, ...(d.extra ?? [])];
+  const docCount = Number((await d.db.query(`SELECT count(*)::int AS n FROM ${s}.documents WHERE source_id = $1`, [src.id])).rows[0].n);
+  let changed = 0;
+  const slowLane = () => sum.resync || changed > SLOW_AFTER_FILES || (docCount >= SLOW_MIN_DOCS && changed > docCount * SLOW_SHARE);
   const start = `https://graph.microsoft.com/v1.0/drives/${src.drive_id}/root/delta`;
   const state = (await d.db.query('SELECT delta_link FROM kb_meta.sync_state WHERE source_id = $1', [src.id])).rows[0];
   const sum: SyncSummary = { indexed: 0, unchanged: 0, skipped: 0, errors: 0, deleted: 0, folders: 0, resync: !state?.delta_link };
@@ -62,7 +71,7 @@ export async function syncSource(d: IngestDeps & { graph: GraphLike }, src: Sour
       for (const f of folders) {
         const rel = relSegments(src, f);
         if (!rel?.length) continue;
-        await upsertFolder(d, src, { driveItemId: f.id, parentId: f.parentReference?.id ?? null, name: f.name!, folders: rel });
+        for (const t of all) await upsertFolder(t, src, { driveItemId: f.id, parentId: f.parentReference?.id ?? null, name: f.name!, folders: rel });
         sum.folders++;
       }
       for (const f of files) {
@@ -84,19 +93,28 @@ export async function syncSource(d: IngestDeps & { graph: GraphLike }, src: Sour
           sum.skipped++;
           continue;
         }
+        changed++;
+        if (slowLane()) await d.pacer?.beforeFile();
         let bytes: Buffer;
         try { bytes = await d.graph.download(src.drive_id, f); }
         catch { sum.errors++; continue; }
         const r = await ingestFile(d, src, info, bytes);
+        for (const t of d.extra ?? []) await ingestFile(t, src, info, bytes);
         if (r === 'error') sum.errors++; else sum[r]++;
       }
-      for (const del of deletes) sum.deleted += await deleteItem(d, src.id, del.id);
+      for (const del of deletes) {
+        sum.deleted += await deleteItem(d, src.id, del.id);
+        for (const t of d.extra ?? []) await deleteItem(t, src.id, del.id);
+      }
       url = page['@odata.nextLink'] ?? null;
       deltaLink = page['@odata.deltaLink'] ?? deltaLink;
     }
     if (sum.resync) {
       const gone = (await d.db.query(`SELECT drive_item_id FROM ${s}.documents WHERE source_id = $1 AND NOT seen_in_resync`, [src.id])).rows;
-      for (const g of gone) sum.deleted += await deleteItem(d, src.id, g.drive_item_id);
+      for (const g of gone) {
+        sum.deleted += await deleteItem(d, src.id, g.drive_item_id);
+        for (const t of d.extra ?? []) await deleteItem(t, src.id, g.drive_item_id);
+      }
     }
     await saveState(d, src.id, { delta_link: deltaLink ?? null, ok: true, items });
     return sum;

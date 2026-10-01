@@ -19,6 +19,13 @@ CREATE TABLE IF NOT EXISTS kb_meta.sync_state (
 CREATE TABLE IF NOT EXISTS kb_meta.query_log (
   id bigserial PRIMARY KEY, at timestamptz NOT NULL DEFAULT now(), user_name text, question text NOT NULL,
   plan jsonb, generation int, latency_ms int, passages int, rows int, confidence text);
+ALTER TABLE kb_meta.generations ADD COLUMN IF NOT EXISTS config_version text;
+ALTER TABLE kb_meta.generations ADD COLUMN IF NOT EXISTS retired_at timestamptz;
+ALTER TABLE kb_meta.generations ADD COLUMN IF NOT EXISTS eval_hit5 real;
+ALTER TABLE kb_meta.generations ADD COLUMN IF NOT EXISTS eval_mrr real;
+ALTER TABLE kb_meta.generations ADD COLUMN IF NOT EXISTS build_total int NOT NULL DEFAULT 0;
+ALTER TABLE kb_meta.generations ADD COLUMN IF NOT EXISTS build_done int NOT NULL DEFAULT 0;
+ALTER TABLE kb_meta.generations ADD COLUMN IF NOT EXISTS note text;
 `;
 
 export function generationDdl(n: number, dim: number): string {
@@ -60,7 +67,7 @@ CREATE INDEX IF NOT EXISTS ${s}_datasets_meta ON ${s}.datasets (hotel, dataset, 
 
 /**
  * Creates or updates kb_meta and the active generation's schema. Returns the active generation.
- * A generation's vectors come from one embedding model, so a different model is refused here.
+ * Its embedding model is never changed here.
  */
 export async function migrate(db: Db, embeddingModel: string, dim: number): Promise<number> {
   await db.query(META);
@@ -72,10 +79,8 @@ export async function migrate(db: Db, embeddingModel: string, dim: number): Prom
     return 1;
   }
   const active = Number(r.rows[0].value);
-  const g = (await db.query('SELECT embedding_model, embedding_dim FROM kb_meta.generations WHERE id = $1', [active])).rows[0];
-  if (g.embedding_model !== embeddingModel || g.embedding_dim !== dim) {
-    throw new Error(`Generation ${active} was built with ${g.embedding_model} (${g.embedding_dim} dims), but the configured embedder is ${embeddingModel} (${dim} dims). Set KB_EMBED_PROVIDER back, or rebuild into a new generation.`);
-  }
-  await db.query(generationDdl(active, dim));
+  // The active generation keeps its own model; the configured embedder is used for the next generation (Plan 3).
+  const g = (await db.query('SELECT embedding_dim FROM kb_meta.generations WHERE id = $1', [active])).rows[0];
+  await db.query(generationDdl(active, g.embedding_dim));
   return active;
 }

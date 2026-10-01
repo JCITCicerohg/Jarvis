@@ -8,11 +8,11 @@ import { num, parser, short, str, tool, type ToolSpec } from './spec.ts';
 
 export const kbConfigured = () => !!process.env.KB_API_URL && !!process.env.KB_API_KEY;
 
-async function kb(path: string, init: { method?: string; body?: unknown } = {}): Promise<Response> {
+async function kb(path: string, init: { method?: string; body?: unknown } = {}, key = process.env.KB_API_KEY): Promise<Response> {
   if (!kbConfigured()) throw new Error('The knowledge base is not configured. Set KB_API_URL and KB_API_KEY in .env.');
   const res = await fetch(process.env.KB_API_URL!.replace(/\/+$/, '') + path, {
     method: init.method ?? 'GET',
-    headers: { Authorization: 'Bearer ' + process.env.KB_API_KEY, ...(init.body !== undefined ? { 'Content-Type': 'application/json' } : {}) },
+    headers: { Authorization: 'Bearer ' + key, ...(init.body !== undefined ? { 'Content-Type': 'application/json' } : {}) },
     body: init.body !== undefined ? JSON.stringify(init.body) : undefined,
   });
   if (!res.ok) {
@@ -45,6 +45,15 @@ export async function kbFetchDataset(ids: number[]): Promise<string> {
   }
   return `Registered ${ids.length} view(s). Query them with analytics_query, e.g. SELECT * FROM ${`kb_dataset_${ids[0]}`} LIMIT 10.\n\n` + lines.join('\n\n');
 }
+
+async function kbAdmin(path: string, init: { method?: string; body?: unknown } = {}): Promise<string> {
+  if (!process.env.KB_ADMIN_KEY) throw new Error('Knowledge-base admin is not configured. Set KB_ADMIN_KEY in .env.');
+  return JSON.stringify(await (await kb(path, init, process.env.KB_ADMIN_KEY)).json());
+}
+export const kbGenerations = () => kbAdmin('/v1/admin/generations');
+export const kbBuild = () => kbAdmin('/v1/admin/generations', { method: 'POST' });
+export const kbCutover = (generation: number) => kbAdmin('/v1/admin/cutover', { method: 'POST', body: { generation } });
+export const kbRollback = () => kbAdmin('/v1/admin/rollback', { method: 'POST' });
 
 const RESULT_HELP = 'Returns Result JSON: answer_data (calculated rows), passages or files (with file, page and SharePoint link), sources, coverage.missing (periods with no data), notes and confidence. Answer only from it, cite the file and link, and state missing periods and notes plainly.';
 
@@ -82,5 +91,47 @@ export const KB_TOOLS: ToolSpec<unknown>[] = [
     }),
     step: i => ({ kind: 'data', text: `Loaded ${i.ids.length} knowledge-base dataset(s) for analysis` }),
     run: i => kbFetchDataset(i.ids),
+  }),
+  tool<Record<string, never>>({
+    def: {
+      name: 'kb_generations',
+      description: 'Knowledge_Base admin: list knowledge-base generations (active, candidate being built or ready, retired), with build progress, eval hit@5 and gate notes.',
+      input_schema: { type: 'object', properties: {} },
+    },
+    parse: parser(() => ({})),
+    step: () => ({ kind: 'memory', text: 'Checked knowledge-base generations' }),
+    run: () => kbGenerations(),
+  }),
+  tool<Record<string, never>>({
+    def: {
+      name: 'kb_build',
+      description: 'Knowledge_Base admin: start rebuilding the knowledge base into a new generation (after a rule change such as chunking, parsing or the embedding model). The live generation keeps answering; check progress with kb_generations.',
+      input_schema: { type: 'object', properties: {} },
+    },
+    parse: parser(() => ({})),
+    step: () => ({ kind: 'memory', text: 'Started a knowledge-base rebuild' }),
+    run: () => kbBuild(),
+  }),
+  tool<{ generation: number }>({
+    def: {
+      name: 'kb_cutover',
+      description: 'Knowledge_Base admin: switch answers to a generation whose status is ready. Takes seconds; roll back with kb_rollback for 7 days.',
+      input_schema: { type: 'object', properties: { generation: { type: 'number' } }, required: ['generation'] },
+    },
+    parse: parser(o => { const g = num(o, 'generation'); if (!Number.isInteger(g)) throw new Error('"generation" must be a whole number'); return { generation: g! }; }),
+    step: i => ({ kind: 'memory', text: `Switched the knowledge base to generation ${i.generation}` }),
+    gate: i => ({ action: `Switch the knowledge base to generation ${i.generation}`, detail: 'Jarvis will answer from the new generation right away. You can roll back for 7 days.', risk: 'Irreversible' }),
+    run: i => kbCutover(i.generation),
+  }),
+  tool<Record<string, never>>({
+    def: {
+      name: 'kb_rollback',
+      description: 'Knowledge_Base admin: switch answers back to the previously active generation (available for 7 days after a cutover).',
+      input_schema: { type: 'object', properties: {} },
+    },
+    parse: parser(() => ({})),
+    step: () => ({ kind: 'memory', text: 'Rolled the knowledge base back' }),
+    gate: () => ({ action: 'Roll the knowledge base back to the previous generation', detail: 'Jarvis will answer from the previous generation right away.', risk: 'Irreversible' }),
+    run: () => kbRollback(),
   }),
 ];

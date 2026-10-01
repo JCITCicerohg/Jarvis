@@ -23,6 +23,9 @@ interface DatasetOut { sheet: string; normalizer: string; table: TidyTable; key:
 
 const sha256 = (b: Buffer) => createHash('sha256').update(b).digest('hex');
 
+/** Raw originals are shared by all generations; rebuilds read them back by this key. */
+export const rawKey = (sourceId: string, driveItemId: string, tag: string) => safeKey('raw', sourceId, driveItemId, tag);
+
 export async function findDocument(d: IngestDeps, sourceId: string, driveItemId: string) {
   const r = await d.db.query(`SELECT id, ctag, status FROM ${gschema(d.gen)}.documents WHERE source_id = $1 AND drive_item_id = $2`, [sourceId, driveItemId]);
   return (r.rows[0] as { id: number; ctag: string | null; status: string } | undefined) ?? null;
@@ -60,7 +63,7 @@ async function build(d: IngestDeps, src: SourceConfig, item: ItemInfo, meta: Doc
       const context = contextHeader(meta, null);
       sections.push({ heading: `Sheet: ${sheet.name}`, page: null, text: describeSheet({ file: item.name, sheet: sheet.name, context, table: n.table }) });
       sections.push(...sheetRowSections(n.table, sheet.name));
-      const key = safeKey('tidy', src.id, meta.dataset ?? 'misc', `${item.driveItemId}-${sheet.name}.parquet`);
+      const key = safeKey('tidy', `g${d.gen}`, src.id, meta.dataset ?? 'misc', `${item.driveItemId}-${sheet.name}.parquet`);
       await writeParquet(n.table, await d.blob.localPath(key));
       datasets.push({ sheet: sheet.name, normalizer: n.normalizer, table: n.table, key });
     }
@@ -100,11 +103,12 @@ export async function ingestFile(d: IngestDeps, src: SourceConfig, item: ItemInf
   const hash = sha256(bytes);
   const prev = (await d.db.query(`SELECT id, content_hash, status FROM ${s}.documents WHERE source_id = $1 AND drive_item_id = $2`, [item.sourceId, item.driveItemId])).rows[0];
   if (prev && prev.content_hash === hash && prev.status === 'indexed') {
+    await d.blob.put(rawKey(src.id, item.driveItemId, item.ctag ?? hash.slice(0, 16)), bytes);
     await withTx(d.db, async tx => { await upsertDoc(tx, s, item, meta, { status: 'indexed', hash }); await retagChunks(tx, s, Number(prev.id), meta); });
     return 'unchanged';
   }
   try {
-    await d.blob.put(safeKey('raw', src.id, item.driveItemId, item.ctag ?? hash.slice(0, 16)), bytes);
+    await d.blob.put(rawKey(src.id, item.driveItemId, item.ctag ?? hash.slice(0, 16)), bytes);
     const built = await build(d, src, item, meta, bytes);
     if ('unsupported' in built) { await upsertDoc(d.db, s, item, meta, { status: 'skipped', error: built.unsupported, hash }); return 'skipped'; }
     const children = built.parents.flatMap(p => p.children.map(c => `${contextHeader(meta, p.heading)}\n${c.text}`));

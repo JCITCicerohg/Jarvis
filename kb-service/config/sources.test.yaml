@@ -1,0 +1,10 @@
+# Test environment: a small folder the owner creates at the top of the same document library.
+sources:
+  - id: kb-test
+    name: Jarvis KB Test
+    business: Cicero Hospitality Group
+    hotel: Jarvis KB Test
+    drive_id: "b!jdzaTEakwE2NJPvDBZJWzXcFMv2TcyVKqI2w_qwcCh0Mdg0JeuLATaBfh4OH160j"
+    root_path: Jarvis KB Test
+    levels: [department, dataset]
+    enabled: true

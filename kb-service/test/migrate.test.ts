@@ -23,8 +23,10 @@ describe('migrate', () => {
     expect(Number(s.rows[0].value)).toBe(1);
   });
 
-  it('refuses a different embedding model on an existing generation', async () => {
-    await expect(migrate(db, 'text-embedding-3-small', 1536)).rejects.toThrow(/built with fake-hash \(384 dims\)/);
+  it('keeps the active generation when a different embedding model is configured', async () => {
+    expect(await migrate(db, 'text-embedding-3-small', 1536)).toBe(1);
+    const g = (await db.query('SELECT embedding_model, embedding_dim FROM kb_meta.generations WHERE id = 1')).rows[0];
+    expect(g).toEqual({ embedding_model: 'fake-hash', embedding_dim: 384 });
   });
 
   it('loads sources.yaml and upserts sources', async () => {

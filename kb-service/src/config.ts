@@ -46,11 +46,12 @@ export async function upsertSources(db: Db, sources: SourceConfig[]): Promise<vo
 export type LlmProvider = 'anthropic' | 'openai' | 'azure';
 export interface Env {
   databaseUrl: string; port: number; blobDir: string; sourcesFile: string;
-  apiKeys: Map<string, string>; openaiKey: string; syncMinutes: number;
+  apiKeys: Map<string, string>; adminKeys: Map<string, string>; openaiKey: string; syncMinutes: number;
   llm: { provider: LlmProvider; model: string };
   embedProvider: 'local' | 'openai' | 'azure';
   azure: { endpoint: string; key: string; apiVersion: string; embedDeployment: string };
   ms: { tenantId: string; clientId: string; clientSecret: string } | null;
+  configVersion: string | null; evalFile: string;
 }
 
 const LLM_DEFAULTS: Record<LlmProvider, string> = { anthropic: 'claude-haiku-4-5', openai: 'gpt-5-mini', azure: '' };
@@ -85,8 +86,11 @@ export function loadEnv(): Env {
     blobDir: e.BLOB_DIR ?? 'data/blobs',
     sourcesFile: e.SOURCES_FILE ?? 'config/sources.yaml',
     apiKeys: parseKeys(e.KB_API_KEYS ?? ''),
+    adminKeys: parseKeys(e.KB_ADMIN_KEYS ?? ''),
     openaiKey: e.OPENAI_API_KEY ?? '',
     syncMinutes: Number(e.SYNC_MINUTES ?? 5),
+    configVersion: e.KB_CONFIG_VERSION || null,
+    evalFile: e.EVAL_FILE ?? 'eval/questions.jsonl',
     ms,
   };
 }

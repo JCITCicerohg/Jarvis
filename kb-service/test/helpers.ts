@@ -6,7 +6,13 @@ export const TEST_DB = process.env.TEST_DATABASE_URL ?? 'postgres://kb:kb@localh
 /** Drops and recreates every kb schema in the test database. */
 export async function freshDb(): Promise<Db> {
   const db = createPool(TEST_DB);
-  await db.query('DROP SCHEMA IF EXISTS kb_meta CASCADE; DROP SCHEMA IF EXISTS kb_g1 CASCADE;');
+  await db.query(`
+    DROP SCHEMA IF EXISTS kb_meta CASCADE;
+    DO $$ DECLARE s text; BEGIN
+      FOR s IN SELECT schema_name FROM information_schema.schemata WHERE schema_name LIKE 'kb\_g%' LOOP
+        EXECUTE 'DROP SCHEMA ' || quote_ident(s) || ' CASCADE';
+      END LOOP;
+    END $$;`);
   await migrate(db, 'fake-hash', 384);
   return db;
 }

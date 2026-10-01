@@ -1,46 +1,70 @@
 import express, { type NextFunction, type Request, type Response } from 'express';
 import type { SourceConfig } from '../config.ts';
+import type { Db } from '../db/pool.ts';
 import { gschema } from '../db/migrate.ts';
+import { GenError, type Generation } from '../gen/registry.ts';
 import { runQuery, type QueryDeps } from '../query/executor.ts';
 import type { Filter } from '../query/filter.ts';
 import { hybridSearch } from '../search/hybrid.ts';
+import type { BlobStore } from '../store/blob.ts';
 import type { GraphLike } from '../sync/graph.ts';
 
-export interface AppDeps extends QueryDeps {
-  apiKeys: Map<string, string>; sources: SourceConfig[]; graph: GraphLike | null;
-  syncNow(sourceId?: string): Promise<void>;
+export interface GenAccess {
+  queryDeps(): Promise<QueryDeps>;
+  list(): Promise<Generation[]>;
+  startBuild(): Promise<number>;
+  evaluate(id: number): Promise<{ ready: boolean; reasons: string[] }>;
+  cutover(id: number): Promise<{ from: number; to: number }>;
+  rollback(): Promise<{ from: number; to: number }>;
+  discard(id: number): Promise<void>;
+}
+
+export interface AppDeps {
+  db: Db; blob: BlobStore; apiKeys: Map<string, string>; adminKeys: Map<string, string>;
+  sources: SourceConfig[]; graph: GraphLike | null; syncNow(sourceId?: string): Promise<void>; gens: GenAccess;
 }
 
 class BadRequest extends Error {}
 const need = (v: unknown, name: string) => { if (typeof v !== 'string' || !v.trim()) throw new BadRequest(`"${name}" must be a non-empty string`); return v.trim(); };
+const intOf = (v: unknown, name: string) => { const n = Number(v); if (!Number.isInteger(n) || n < 1) throw new BadRequest(`"${name}" must be a generation number`); return n; };
+const bearer = (req: Request) => /^Bearer (.+)$/.exec(req.header('authorization') ?? '')?.[1];
 
 export function createApp(d: AppDeps) {
   const app = express();
   app.use(express.json({ limit: '1mb' }));
-  const s = gschema(d.gen);
 
   app.get('/health', (_req, res) => { res.json({ ok: true }); });
 
+  app.use('/v1/admin', (req: Request, res: Response, next: NextFunction) => {
+    const user = d.adminKeys.get(bearer(req) ?? '');
+    if (!user) { res.status(401).json({ error: 'An admin key is required' }); return; }
+    res.locals.user = user;
+    next();
+  });
+
   app.use('/v1', (req: Request, res: Response, next: NextFunction) => {
-    const key = /^Bearer (.+)$/.exec(req.header('authorization') ?? '')?.[1];
-    const user = key ? d.apiKeys.get(key) : undefined;
+    const key = bearer(req) ?? '';
+    const user = d.apiKeys.get(key) ?? d.adminKeys.get(key);
     if (!user) { res.status(401).json({ error: 'Missing or unknown API key' }); return; }
     res.locals.user = user;
     next();
   });
 
   app.post('/v1/query', async (req, res) => {
-    res.json(await runQuery(d, need(req.body?.question, 'question'), undefined, res.locals.user));
+    const question = need(req.body?.question, 'question');
+    res.json(await runQuery(await d.gens.queryDeps(), question, undefined, res.locals.user));
   });
 
   app.post('/v1/search', async (req, res) => {
     const filter = (req.body?.filter ?? { and: [] }) as Filter;
     const k = Math.min(Math.max(Number(req.body?.k ?? 8), 1), 30);
-    const passages = await hybridSearch(d, { filter, keywords: { must: [], should: [], not: [] }, semantic: need(req.body?.query, 'query'), k });
+    const query = need(req.body?.query, 'query');
+    const passages = await hybridSearch(await d.gens.queryDeps(), { filter, keywords: { must: [], should: [], not: [] }, semantic: query, k });
     res.json({ passages });
   });
 
   app.get('/v1/datasets', async (req, res) => {
+    const s = gschema((await d.gens.queryDeps()).gen);
     const q = req.query as Record<string, string | undefined>;
     const params: unknown[] = [];
     const where = ['TRUE'];
@@ -56,6 +80,7 @@ export function createApp(d: AppDeps) {
   });
 
   app.get('/v1/datasets/:id/file', async (req, res) => {
+    const s = gschema((await d.gens.queryDeps()).gen);
     const id = Number(req.params.id);
     const row = Number.isInteger(id) ? (await d.db.query(`SELECT blob_key FROM ${s}.datasets WHERE id = $1`, [id])).rows[0] : undefined;
     if (!row) { res.status(404).json({ error: 'No dataset with that id' }); return; }
@@ -63,11 +88,14 @@ export function createApp(d: AppDeps) {
   });
 
   app.get('/v1/status', async (_req, res) => {
+    const gen = (await d.gens.queryDeps()).gen;
+    const s = gschema(gen);
     const counts = (await d.db.query(`SELECT source_id, status, count(*)::int n FROM ${s}.documents GROUP BY 1, 2`)).rows;
     const state = (await d.db.query('SELECT * FROM kb_meta.sync_state')).rows;
     const errors = (await d.db.query(`SELECT source_id, name, path, error FROM ${s}.documents WHERE status = 'error' ORDER BY id DESC LIMIT 10`)).rows;
     res.json({
-      generation: d.gen,
+      generation: gen,
+      generations: await d.gens.list(),
       sources: d.sources.map(src => ({
         id: src.id, name: src.name, enabled: src.enabled,
         documents: Object.fromEntries(counts.filter(c => c.source_id === src.id).map(c => [c.status, c.n])),
@@ -84,8 +112,16 @@ export function createApp(d: AppDeps) {
     res.status(202).json({ started: true });
   });
 
+  app.get('/v1/admin/generations', async (_req, res) => { res.json({ generations: await d.gens.list() }); });
+  app.post('/v1/admin/generations', async (_req, res) => { res.status(202).json({ id: await d.gens.startBuild() }); });
+  app.post('/v1/admin/generations/:id/evaluate', async (req, res) => { res.json(await d.gens.evaluate(intOf(req.params.id, 'id'))); });
+  app.delete('/v1/admin/generations/:id', async (req, res) => { await d.gens.discard(intOf(req.params.id, 'id')); res.json({ discarded: true }); });
+  app.post('/v1/admin/cutover', async (req, res) => { res.json(await d.gens.cutover(intOf(req.body?.generation, 'generation'))); });
+  app.post('/v1/admin/rollback', async (_req, res) => { res.json(await d.gens.rollback()); });
+
   app.use((err: Error, _req: Request, res: Response, _next: NextFunction) => {
     if (err instanceof BadRequest) { res.status(400).json({ error: err.message }); return; }
+    if (err instanceof GenError) { res.status(409).json({ error: err.message }); return; }
     console.error(err);
     res.status(500).json({ error: 'Internal error: ' + err.message });
   });

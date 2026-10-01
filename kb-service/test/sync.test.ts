@@ -35,7 +35,7 @@ const START = 'https://graph.microsoft.com/v1.0/drives/DRV/root/delta';
 const count = async () => Number((await db.query('SELECT count(*) n FROM kb_g1.documents')).rows[0].n);
 
 beforeAll(async () => { db = await freshDb(); await upsertSources(db, [SRC]); });
-beforeEach(async () => { await db.query('TRUNCATE kb_g1.documents, kb_g1.folders RESTART IDENTITY CASCADE; DELETE FROM kb_meta.sync_state'); });
+beforeEach(async () => { await db.query('TRUNCATE kb_g1.documents, kb_g1.folders RESTART IDENTITY CASCADE; DELETE FROM kb_meta.sync_state; DROP SCHEMA IF EXISTS kb_g2 CASCADE'); });
 afterAll(async () => { await db.end(); });
 
 const deps = (graph: GraphLike) => ({ db, gen: 1, blob: new LocalBlobStore(mkdtempSync(join(tmpdir(), 'kb-sync-'))), embedder: new FakeEmbedder(), graph });
@@ -97,5 +97,36 @@ describe('syncSource', () => {
     g.pages.set(START, { value: [{ ...file('BIG', 'huge.pdf', '/Hilton Palm Beach PBI'), size: 200 * 1024 * 1024 }], '@odata.deltaLink': 'x' });
     expect((await syncSource(deps(g), SRC)).skipped).toBe(1);
     expect(g.downloads).toEqual([]);
+  });
+
+  it('applies every change to extra generations too', async () => {
+    await db.query(`DROP SCHEMA IF EXISTS kb_g2 CASCADE`);
+    const { generationDdl } = await import('../src/db/migrate.ts');
+    await db.query(generationDdl(2, 384));
+    const g = new FakeGraph();
+    g.pages.set(START, { value: [folder('F1', 'Guest Scores', '/Hilton Palm Beach PBI'), file('A', 'a.txt', '/Hilton Palm Beach PBI/Guest Scores'), file('B', 'b.txt', '/Hilton Palm Beach PBI')], '@odata.deltaLink': 'd1' });
+    const base = deps(g);
+    const extra = { ...base, gen: 2 };
+    await syncSource({ ...base, extra: [extra] }, SRC);
+    const ids = async (s: string) => (await db.query(`SELECT drive_item_id FROM ${s}.documents ORDER BY 1`)).rows.map(r => r.drive_item_id);
+    expect(await ids('kb_g2')).toEqual(['A', 'B']);
+    expect((await db.query('SELECT count(*)::int n FROM kb_g2.folders')).rows[0].n).toBe(1);
+    g.pages.set('d1', { value: [{ id: 'A', deleted: {} }], '@odata.deltaLink': 'd2' });
+    await syncSource({ ...base, extra: [extra] }, SRC);
+    expect(await ids('kb_g1')).toEqual(['B']);
+    expect(await ids('kb_g2')).toEqual(['B']);
+  });
+
+  it('throttles a backfill (slow lane) but not a small delta (fast lane)', async () => {
+    const g = new FakeGraph();
+    g.pages.set(START, { value: [file('A', 'a.txt', '/Hilton Palm Beach PBI'), file('B', 'b.txt', '/Hilton Palm Beach PBI')], '@odata.deltaLink': 'd1' });
+    let paced = 0;
+    const pacer = { beforeFile: async () => { paced++; } };
+    await syncSource({ ...deps(g), pacer }, SRC);
+    expect(paced).toBe(2);
+    g.pages.set('d1', { value: [file('C', 'c.txt', '/Hilton Palm Beach PBI')], '@odata.deltaLink': 'd2' });
+    paced = 0;
+    await syncSource({ ...deps(g), pacer }, SRC);
+    expect(paced).toBe(0);
   });
 });
