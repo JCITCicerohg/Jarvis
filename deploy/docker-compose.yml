@@ -1,0 +1,69 @@
+name: jarvis-kb
+services:
+  db:
+    image: pgvector/pgvector:pg16
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: kb
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set in deploy/.env}
+      POSTGRES_DB: kb
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U kb"]
+      interval: 5s
+      retries: 30
+
+  kb:
+    build: ../kb-service
+    restart: unless-stopped
+    env_file: ./kb.env
+    environment:
+      DATABASE_URL: postgres://kb:${POSTGRES_PASSWORD}@db:5432/kb
+      BLOB_DIR: /data/blobs
+      HF_CACHE_DIR: /data/hf-cache
+      SYNC_MINUTES: "0"
+      PORT: "8790"
+    volumes:
+      - kbdata:/data
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://localhost:8790/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 15s
+      retries: 40
+      start_period: 60s
+
+  n8n:
+    image: docker.n8n.io/n8nio/n8n
+    restart: unless-stopped
+    environment:
+      N8N_HOST: n8n.${PUBLIC_HOST:?set in deploy/.env}
+      N8N_PROTOCOL: https
+      WEBHOOK_URL: https://n8n.${PUBLIC_HOST}/
+      N8N_PROXY_HOPS: "1"
+      GENERIC_TIMEZONE: America/New_York
+      N8N_BLOCK_ENV_ACCESS_IN_NODE: "false"
+      KB_N8N_KEY: ${KB_N8N_KEY:?set in deploy/.env}
+    volumes:
+      - n8ndata:/home/node/.n8n
+      - ./n8n:/workflows:ro
+
+  caddy:
+    image: caddy:2
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      PUBLIC_HOST: ${PUBLIC_HOST}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddydata:/data
+
+volumes:
+  pgdata: {}
+  kbdata: {}
+  n8ndata: {}
+  caddydata: {}

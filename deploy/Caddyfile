@@ -1,0 +1,7 @@
+kb.{$PUBLIC_HOST} {
+	reverse_proxy kb:8790
+}
+
+n8n.{$PUBLIC_HOST} {
+	reverse_proxy n8n:5678
+}

@@ -1,2 +1,6 @@
 .env_api/
 .env
+deploy/.env
+deploy/kb.env
+deploy/.droplet.json
+deploy/.secrets.json
