@@ -4,7 +4,7 @@ import { complete } from './agent/llm.ts';
 import { chatPrompt, type ChatTaskLine } from './agent/prompt.ts';
 import { startRun } from './agent/runner.ts';
 import { memoryContext, memoryQuery, memorySaveRule, memoryWrite, rulesText } from './agent/tools/memory.ts';
-import { kbConfigured, kbQuery } from './agent/tools/kb.ts';
+import { kbConfigured, kbQuery, kbCorrect } from './agent/tools/kb.ts';
 import { store } from './state.ts';
 import { engineSummary } from './integrations.ts';
 
@@ -104,6 +104,12 @@ const KB_QUERY: Anthropic.Tool = {
   input_schema: { type: 'object', properties: { question: { type: 'string' } }, required: ['question'] },
 };
 
+const KB_CORRECT: Anthropic.Tool = {
+  name: 'kb_correct',
+  description: "Record the user's correction of a fact about company data (hotel reports, projects, figures). Company-wide by default, pending approval; scope 'personal' if they say it's just for them. If the result has 'clarify', ask that question.",
+  input_schema: { type: 'object', properties: { message: { type: 'string' }, scope: { type: 'string', enum: ['global', 'personal'] } }, required: ['message'] },
+};
+
 const text = (v: unknown) => (typeof v === 'string' && v.trim() ? v : undefined);
 
 async function runChatTool(b: Anthropic.ToolUseBlockParam, live: boolean, taskIds: Set<string>, actions: AgentAction[]): Promise<{ text: string; isError?: boolean }> {
@@ -169,6 +175,13 @@ async function runChatTool(b: Anthropic.ToolUseBlockParam, live: boolean, taskId
       if (!q) return { text: 'question is required', isError: true };
       try { return { text: await kbQuery(q) }; } catch (e) { return { text: (e as Error).message, isError: true }; }
     }
+    case 'kb_correct': {
+      const message = text(i.message);
+      if (!message) return { text: 'message is required', isError: true };
+      const scope = i.scope === 'personal' ? 'personal' : 'global';
+      try { const r = await kbCorrect(message, scope); actions.push({ type: 'memory', text: 'Saved a correction: ' + message }); return { text: r }; }
+      catch (e) { return { text: (e as Error).message, isError: true }; }
+    }
   }
   return { text: 'Unknown tool ' + b.name, isError: true };
 }
@@ -191,7 +204,7 @@ export async function chat(body: ChatBody): Promise<{ reply: string; actions: Ag
   const recent = body.messages.filter(m => m.role === 'user').slice(-2).map(m => m.text).join(' ');
   const memory = live ? memoryContext(recent) : '';
   const system = chatPrompt(lines, live ? rulesText() : '(demo mode)', live, body.clock ?? new Date().toLocaleTimeString(), live ? await engineSummary() : '', memory);
-  const tools = live ? [LIVE_START, DECIDE, ANSWER, ASK, MEMORY_QUERY, MEMORY_WRITE, MEMORY_RULE, ...(kbConfigured() ? [KB_QUERY] : [])] : [DEMO_START, DECIDE, ASK];
+  const tools = live ? [LIVE_START, DECIDE, ANSWER, ASK, MEMORY_QUERY, MEMORY_WRITE, MEMORY_RULE, ...(kbConfigured() ? [KB_QUERY, KB_CORRECT] : [])] : [DEMO_START, DECIDE, ASK];
   const taskIds = new Set(lines.map(t => t.id));
   const actions: AgentAction[] = [];
 

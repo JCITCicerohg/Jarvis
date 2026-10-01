@@ -33,7 +33,7 @@ const count = async (t: string) => Number((await db.query(`SELECT count(*) n FRO
 
 beforeAll(async () => { db = await freshDb(); });
 beforeEach(async () => {
-  await db.query('TRUNCATE kb_g1.documents, kb_g1.folders RESTART IDENTITY CASCADE');
+  await db.query('TRUNCATE kb_g1.documents, kb_g1.folders, kb_meta.corrections RESTART IDENTITY CASCADE');
   d = { db, gen: 1, blob: new LocalBlobStore(mkdtempSync(join(tmpdir(), 'kb-ing-'))), embedder: new FakeEmbedder() };
 });
 afterAll(async () => { await db.end(); });
@@ -89,6 +89,32 @@ describe('ingestFile', () => {
     await ingestFile(d, SRC, item({ ctag: 'c1' }), bytes);
     expect(await ingestFile(d, SRC, item({ ctag: 'c9' }), bytes)).toBe('unchanged');
     expect((await d.blob.get(rawKey('hilton-pbi', 'ITEM1', 'c9'))).equals(bytes)).toBe(true);
+  });
+});
+
+describe('supersession', () => {
+  it('sends an overlapping correction to review when a newer official file arrives', async () => {
+    const { createCorrection } = await import('../src/corrections/store.ts');
+    const c = await createCorrection(db, { text: 'GL closes on the 5th.', original_message: 'x', author: 'owner', scope: 'global', hotel: 'Hilton Palm Beach PBI', department: 'Accounting', dataset: "GL's", entities: [], period_start: null, period_end: null, embedding: [1], embedding_model: 'fake-hash' });
+    await ingestFile(d, SRC, item({ modifiedAt: new Date(Date.now() + 60_000).toISOString() }), await glBook());
+    const row = (await db.query('SELECT status, superseded_by_item FROM kb_meta.corrections WHERE id = $1', [c.id])).rows[0];
+    expect(row).toEqual({ status: 'needs_review', superseded_by_item: 'ITEM1' });
+  });
+
+  it('still indexes the file if flagSuperseded fails', async () => {
+    try {
+      await db.query('ALTER TABLE kb_meta.corrections RENAME TO corrections_off');
+      const result = await ingestFile(d, SRC, item({ modifiedAt: new Date(Date.now() + 60_000).toISOString() }), await glBook());
+      expect(result).toBe('indexed');
+      const doc = (await db.query('SELECT status FROM kb_g1.documents WHERE drive_item_id = $1', ['ITEM1'])).rows[0];
+      expect(doc.status).toBe('indexed');
+    } finally {
+      try {
+        await db.query('ALTER TABLE kb_meta.corrections_off RENAME TO corrections');
+      } catch {
+        // table may not exist if test failed earlier
+      }
+    }
   });
 });
 

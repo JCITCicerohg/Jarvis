@@ -17,7 +17,7 @@ describe('migrate', () => {
     const t = await db.query(`SELECT table_schema || '.' || table_name AS t FROM information_schema.tables WHERE table_schema IN ('kb_meta','kb_g1') ORDER BY 1`);
     expect(t.rows.map(r => r.t)).toEqual([
       'kb_g1.chunks', 'kb_g1.datasets', 'kb_g1.documents', 'kb_g1.folders', 'kb_g1.sections',
-      'kb_meta.generations', 'kb_meta.query_log', 'kb_meta.settings', 'kb_meta.sources', 'kb_meta.sync_state',
+      'kb_meta.corrections', 'kb_meta.generations', 'kb_meta.query_log', 'kb_meta.settings', 'kb_meta.sources', 'kb_meta.sync_state',
     ]);
     const s = await db.query(`SELECT value FROM kb_meta.settings WHERE key = 'active_generation'`);
     expect(Number(s.rows[0].value)).toBe(1);

@@ -27,6 +27,9 @@ beforeAll(async () => {
       else if (req.url === '/v1/datasets/7/file') { res.end(parquet); }
       else if (req.url === '/v1/admin/generations' && req.method === 'GET') { res.setHeader('Content-Type', 'application/json'); res.end(JSON.stringify({ generations: [{ id: 1, status: 'active' }, { id: 2, status: 'ready', eval_hit5: 0.9 }] })); }
       else if (req.url === '/v1/admin/cutover') { res.setHeader('Content-Type', 'application/json'); res.end(JSON.stringify({ from: 1, to: 2 })); }
+      else if (req.url === '/v1/corrections' && req.method === 'POST') { res.statusCode = 201; res.setHeader('Content-Type', 'application/json'); res.end(JSON.stringify({ correction: { id: 7, text: 'The lobby renovation slipped to Q4 2026.', status: 'pending', scope: 'global' }, notes: [] })); }
+      else if (req.url?.startsWith('/v1/corrections?')) { res.setHeader('Content-Type', 'application/json'); res.end(JSON.stringify({ corrections: [{ id: 7, status: 'pending' }] })); }
+      else if (req.url === '/v1/corrections/7/decide') { res.setHeader('Content-Type', 'application/json'); res.end(JSON.stringify({ correction: { id: 7, status: 'approved' } })); }
       else { res.statusCode = 404; res.end(JSON.stringify({ error: 'No dataset with that id' })); }
     });
   }).listen(0);
@@ -74,5 +77,25 @@ describe('kb tools', () => {
     expect(await cut.gate!(input)).toMatchObject({ action: 'Switch the knowledge base to generation 2', risk: 'Irreversible' });
     expect(await roll.gate!(roll.parse({}))).toMatchObject({ action: 'Roll the knowledge base back to the previous generation', risk: 'Irreversible' });
     expect(cut.parse({ generation: 'two' })).toBe('"generation" must be a whole number');
+  });
+
+  it('records a correction, global by default, and decides with the right key', async () => {
+    const c = JSON.parse(await kb.kbCorrect('actually the lobby reno slipped to Q4'));
+    expect(c.correction).toMatchObject({ id: 7, status: 'pending', scope: 'global' });
+    expect(JSON.parse(seen.at(-1)!.body)).toEqual({ message: 'actually the lobby reno slipped to Q4', scope: 'global' });
+    expect(seen.at(-1)!.auth).toBe('Bearer secret');
+    expect(JSON.parse(await kb.kbCorrections('pending')).corrections[0].id).toBe(7);
+    expect(seen.at(-1)!.url).toBe('/v1/corrections?status=pending');
+    await kb.kbDecideCorrection(7, 'approve');
+    expect(seen.at(-1)!.auth).toBe('Bearer admin');
+    await kb.kbDecideCorrection(7, 'retire');
+    expect(seen.at(-1)!.auth).toBe('Bearer secret');
+  });
+
+  it('validates correction tool inputs', () => {
+    const t = kb.KB_TOOLS.find(x => x.def.name === 'kb_decide_correction')!;
+    expect(t.parse({ id: 7, decision: 'maybe' })).toBe('"decision" must be approve, reject, keep or retire');
+    const c = kb.KB_TOOLS.find(x => x.def.name === 'kb_correct')!;
+    expect(c.parse({ message: 'x', scope: 'team' })).toBe('"scope" must be global or personal');
   });
 });

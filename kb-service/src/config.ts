@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs';
 import YAML from 'yaml';
 import type { Db } from './db/pool.ts';
+import { queryUrl } from './db/migrate.ts';
 
 export type Level = 'department' | 'dataset';
 export interface SourceConfig {
@@ -45,7 +46,7 @@ export async function upsertSources(db: Db, sources: SourceConfig[]): Promise<vo
 
 export type LlmProvider = 'anthropic' | 'openai' | 'azure';
 export interface Env {
-  databaseUrl: string; port: number; blobDir: string; sourcesFile: string;
+  databaseUrl: string; queryDatabaseUrl: string; port: number; blobDir: string; sourcesFile: string;
   apiKeys: Map<string, string>; adminKeys: Map<string, string>; openaiKey: string; syncMinutes: number;
   llm: { provider: LlmProvider; model: string };
   embedProvider: 'local' | 'openai' | 'azure';
@@ -74,6 +75,7 @@ export function loadEnv(): Env {
   if (!(provider in LLM_DEFAULTS)) throw new Error(`KB_LLM_PROVIDER must be anthropic, openai or azure (got "${provider}")`);
   const embedProvider = (e.KB_EMBED_PROVIDER || 'local') as Env['embedProvider'];
   if (!['local', 'openai', 'azure'].includes(embedProvider)) throw new Error(`KB_EMBED_PROVIDER must be local, openai or azure (got "${embedProvider}")`);
+  const databaseUrl = e.DATABASE_URL ?? 'postgres://kb:kb@localhost:5433/kb';
   return {
     llm: { provider, model: e.KB_LLM_MODEL || LLM_DEFAULTS[provider] },
     embedProvider,
@@ -81,7 +83,8 @@ export function loadEnv(): Env {
       endpoint: (e.AZURE_OPENAI_ENDPOINT ?? '').replace(/\/+$/, ''), key: e.AZURE_OPENAI_API_KEY ?? '',
       apiVersion: e.AZURE_OPENAI_API_VERSION || '2024-10-21', embedDeployment: e.AZURE_OPENAI_EMBED_DEPLOYMENT ?? '',
     },
-    databaseUrl: e.DATABASE_URL ?? 'postgres://kb:kb@localhost:5433/kb',
+    databaseUrl,
+    queryDatabaseUrl: queryUrl(databaseUrl, e.KB_QUERY_DB_PASSWORD ?? 'kbquery'),
     port: Number(e.PORT ?? 8790),
     blobDir: e.BLOB_DIR ?? 'data/blobs',
     sourcesFile: e.SOURCES_FILE ?? 'config/sources.yaml',

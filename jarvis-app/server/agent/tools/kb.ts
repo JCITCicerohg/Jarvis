@@ -55,6 +55,17 @@ export const kbBuild = () => kbAdmin('/v1/admin/generations', { method: 'POST' }
 export const kbCutover = (generation: number) => kbAdmin('/v1/admin/cutover', { method: 'POST', body: { generation } });
 export const kbRollback = () => kbAdmin('/v1/admin/rollback', { method: 'POST' });
 
+export async function kbCorrect(message: string, scope: 'global' | 'personal' = 'global'): Promise<string> {
+  return JSON.stringify(await (await kb('/v1/corrections', { method: 'POST', body: { message, scope } })).json());
+}
+export async function kbCorrections(status?: string): Promise<string> {
+  return JSON.stringify(await (await kb('/v1/corrections' + (status ? `?status=${encodeURIComponent(status)}` : '?'))).json());
+}
+export async function kbDecideCorrection(id: number, decision: 'approve' | 'reject' | 'keep' | 'retire'): Promise<string> {
+  const path = `/v1/corrections/${id}/decide`, init = { method: 'POST', body: { decision } };
+  return decision === 'approve' || decision === 'reject' ? kbAdmin(path, init) : JSON.stringify(await (await kb(path, init)).json());
+}
+
 const RESULT_HELP = 'Returns Result JSON: answer_data (calculated rows), passages or files (with file, page and SharePoint link), sources, coverage.missing (periods with no data), notes and confidence. Answer only from it, cite the file and link, and state missing periods and notes plainly.';
 
 export const KB_TOOLS: ToolSpec<unknown>[] = [
@@ -133,5 +144,45 @@ export const KB_TOOLS: ToolSpec<unknown>[] = [
     step: () => ({ kind: 'memory', text: 'Rolled the knowledge base back' }),
     gate: () => ({ action: 'Roll the knowledge base back to the previous generation', detail: 'Jarvis will answer from the previous generation right away.', risk: 'Irreversible' }),
     run: () => kbRollback(),
+  }),
+  tool<{ message: string; scope: 'global' | 'personal' }>({
+    def: {
+      name: 'kb_correct',
+      description: 'Knowledge_Base: record the user\'s correction of a fact about company data (e.g. "the lobby renovation slipped to Q4"). Company-wide by default (pending approval, visible to the user right away); scope "personal" if they say it is just for them. Never changes official files. If the result has "clarify", ask the user that question.',
+      input_schema: { type: 'object', properties: { message: { type: 'string', description: "The user's words" }, scope: { type: 'string', enum: ['global', 'personal'] } }, required: ['message'] },
+    },
+    parse: parser(o => {
+      const scope = o.scope ?? 'global';
+      if (scope !== 'global' && scope !== 'personal') throw new Error('"scope" must be global or personal');
+      return { message: str(o, 'message')!, scope };
+    }),
+    step: i => ({ kind: 'memory', text: 'Saved a knowledge-base correction: ' + short(i.message, 80) }),
+    run: i => kbCorrect(i.message, i.scope),
+  }),
+  tool<{ status?: string }>({
+    def: {
+      name: 'kb_corrections',
+      description: 'Knowledge_Base: list corrections (filter by status: pending, approved, needs_review, rejected, expired). Admins see pending company-wide corrections awaiting approval.',
+      input_schema: { type: 'object', properties: { status: { type: 'string' } } },
+    },
+    parse: parser(o => ({ status: str(o, 'status', false) })),
+    step: () => ({ kind: 'memory', text: 'Checked knowledge-base corrections' }),
+    run: i => kbCorrections(i.status),
+  }),
+  tool<{ id: number; decision: 'approve' | 'reject' | 'keep' | 'retire' }>({
+    def: {
+      name: 'kb_decide_correction',
+      description: 'Knowledge_Base: approve or reject a pending company-wide correction (admin), or keep/retire one flagged needs_review. Only when the user decides.',
+      input_schema: { type: 'object', properties: { id: { type: 'number' }, decision: { type: 'string', enum: ['approve', 'reject', 'keep', 'retire'] } }, required: ['id', 'decision'] },
+    },
+    parse: parser(o => {
+      const id = num(o, 'id');
+      if (!Number.isInteger(id)) throw new Error('"id" must be a whole number');
+      const decision = o.decision;
+      if (decision !== 'approve' && decision !== 'reject' && decision !== 'keep' && decision !== 'retire') throw new Error('"decision" must be approve, reject, keep or retire');
+      return { id: id!, decision };
+    }),
+    step: i => ({ kind: 'memory', text: `Correction ${i.id}: ${i.decision}` }),
+    run: i => kbDecideCorrection(i.id, i.decision),
   }),
 ];

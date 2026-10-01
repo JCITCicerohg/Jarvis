@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { mkdtempSync, readFileSync } from 'node:fs';
+import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { buildKbEnv, loadSecrets, parseEnv, remoteScript } from '../scripts/do-deploy.ts';
@@ -31,9 +31,25 @@ describe('do-deploy helpers', () => {
     const gen = () => `s${++n}`;
     const a = loadSecrets(p, gen);
     const b = loadSecrets(p, gen);
-    expect(a).toEqual({ postgresPassword: 's1', n8nKey: 's2' });
+    expect(a).toEqual({ postgresPassword: 's1', n8nKey: 's2', queryDbPassword: 's3' });
     expect(b).toEqual(a);
     expect(JSON.parse(readFileSync(p, 'utf8'))).toEqual(a);
+  });
+
+  it('backfills queryDbPassword in an old secrets file', () => {
+    const p = join(mkdtempSync(join(tmpdir(), 'kb-sec-')), '.secrets.json');
+    writeFileSync(p, JSON.stringify({ postgresPassword: 'pg1', n8nKey: 'n8n1' }, null, 2), { mode: 0o600 });
+    let n = 0;
+    const gen = () => `new${++n}`;
+    const result = loadSecrets(p, gen);
+    expect(result).toEqual({ postgresPassword: 'pg1', n8nKey: 'n8n1', queryDbPassword: 'new1' });
+    expect(JSON.parse(readFileSync(p, 'utf8'))).toEqual(result);
+  });
+
+  it('buildKbEnv sets KB_QUERY_DB_PASSWORD when provided', () => {
+    const src = parseEnv('KB_API_KEYS=owner:abc\n');
+    const out = parseEnv(buildKbEnv(src, 'n8nkey', 'v1', 'querypass'));
+    expect(out.get('KB_QUERY_DB_PASSWORD')).toBe('querypass');
   });
 
   it('remote script unpacks, protects env files and rebuilds without touching volumes', () => {

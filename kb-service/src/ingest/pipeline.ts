@@ -4,6 +4,7 @@ import type { SourceConfig } from '../config.ts';
 import { gschema } from '../db/migrate.ts';
 import { vec, withTx, type Db, type Tx } from '../db/pool.ts';
 import type { Embedder } from '../embed/embedder.ts';
+import { flagSuperseded } from '../corrections/store.ts';
 import { parseFile } from '../parse/index.ts';
 import type { TextSection } from '../parse/types.ts';
 import { contextHeader, deriveMeta, type DocMeta } from '../paths/metadata.ts';
@@ -117,6 +118,11 @@ export async function ingestFile(d: IngestDeps, src: SourceConfig, item: ItemInf
       const id = await upsertDoc(tx, s, item, meta, { status: 'indexed', hash });
       await writeContent(tx, s, id, meta, built.parents, embeddings, built.datasets);
     });
+    try {
+      await flagSuperseded(d.db, { hotel: meta.hotel, dataset: meta.dataset, entities: [], modifiedAt: item.modifiedAt, driveItemId: item.driveItemId });
+    } catch (e) {
+      console.error('flagSuperseded failed:', e);
+    }
     return 'indexed';
   } catch (e) {
     await upsertDoc(d.db, s, item, meta, { status: 'error', error: (e as Error).message.slice(0, 1000), bumpAttempts: true });

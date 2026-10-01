@@ -3,6 +3,25 @@ import type { Db } from './pool.ts';
 export const DEFAULT_EMBED_DIM = 384;
 export const gschema = (n: number) => `kb_g${n}`;
 
+/** Same server and database, connecting as the read-mostly kb_query role. */
+export function queryUrl(databaseUrl: string, password: string): string {
+  const u = new URL(databaseUrl);
+  u.username = 'kb_query';
+  u.password = password;
+  return u.toString();
+}
+
+const roleSql = (password: string) => `
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'kb_query') THEN CREATE ROLE kb_query LOGIN; END IF;
+END $$;
+ALTER ROLE kb_query PASSWORD '${password.replace(/'/g, "''")}';
+GRANT USAGE ON SCHEMA kb_meta TO kb_query;
+GRANT SELECT ON ALL TABLES IN SCHEMA kb_meta TO kb_query;
+GRANT INSERT, UPDATE ON kb_meta.corrections, kb_meta.query_log TO kb_query;
+GRANT USAGE ON ALL SEQUENCES IN SCHEMA kb_meta TO kb_query;
+`;
+
 const META = `
 CREATE EXTENSION IF NOT EXISTS vector;
 CREATE SCHEMA IF NOT EXISTS kb_meta;
@@ -26,6 +45,18 @@ ALTER TABLE kb_meta.generations ADD COLUMN IF NOT EXISTS eval_mrr real;
 ALTER TABLE kb_meta.generations ADD COLUMN IF NOT EXISTS build_total int NOT NULL DEFAULT 0;
 ALTER TABLE kb_meta.generations ADD COLUMN IF NOT EXISTS build_done int NOT NULL DEFAULT 0;
 ALTER TABLE kb_meta.generations ADD COLUMN IF NOT EXISTS note text;
+CREATE TABLE IF NOT EXISTS kb_meta.corrections (
+  id bigserial PRIMARY KEY, text text NOT NULL, original_message text NOT NULL, author text NOT NULL,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  scope text NOT NULL CHECK (scope IN ('global', 'personal')),
+  status text NOT NULL CHECK (status IN ('pending', 'approved', 'rejected', 'needs_review', 'expired')),
+  hotel text, department text, dataset text, entities text[] NOT NULL DEFAULT '{}', period_start date, period_end date,
+  embedding real[], embedding_model text,
+  tsv tsvector GENERATED ALWAYS AS (to_tsvector('english', text)) STORED,
+  review_due_at timestamptz, expires_at timestamptz, decided_by text, decided_at timestamptz,
+  superseded_by_item text, note text);
+CREATE INDEX IF NOT EXISTS corrections_tsv ON kb_meta.corrections USING gin (tsv);
+CREATE INDEX IF NOT EXISTS corrections_subject ON kb_meta.corrections (hotel, dataset, status);
 `;
 
 export function generationDdl(n: number, dim: number): string {
@@ -62,6 +93,10 @@ CREATE TABLE IF NOT EXISTS ${s}.datasets (
   sheet text NOT NULL, normalizer text NOT NULL, hotel text, department text, dataset text, file_type text,
   period_start date, period_end date, row_count int NOT NULL, columns jsonb NOT NULL, blob_key text NOT NULL);
 CREATE INDEX IF NOT EXISTS ${s}_datasets_meta ON ${s}.datasets (hotel, dataset, period_start);
+DO $$ BEGIN IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'kb_query') THEN
+  EXECUTE 'GRANT USAGE ON SCHEMA ${s} TO kb_query';
+  EXECUTE 'GRANT SELECT ON ALL TABLES IN SCHEMA ${s} TO kb_query';
+END IF; END $$;
 `;
 }
 
@@ -69,18 +104,23 @@ CREATE INDEX IF NOT EXISTS ${s}_datasets_meta ON ${s}.datasets (hotel, dataset, 
  * Creates or updates kb_meta and the active generation's schema. Returns the active generation.
  * Its embedding model is never changed here.
  */
-export async function migrate(db: Db, embeddingModel: string, dim: number): Promise<number> {
+export async function migrate(db: Db, embeddingModel: string, dim: number, queryRolePassword = process.env.KB_QUERY_DB_PASSWORD ?? 'kbquery'): Promise<number> {
   await db.query(META);
+  await db.query(roleSql(queryRolePassword));
   const r = await db.query(`SELECT value FROM kb_meta.settings WHERE key = 'active_generation'`);
+  let active: number;
   if (!r.rowCount) {
     await db.query(generationDdl(1, dim));
     await db.query(`INSERT INTO kb_meta.generations (id, status, embedding_model, embedding_dim) VALUES (1, 'active', $1, $2) ON CONFLICT (id) DO NOTHING`, [embeddingModel, dim]);
     await db.query(`INSERT INTO kb_meta.settings (key, value) VALUES ('active_generation', '1') ON CONFLICT (key) DO NOTHING`);
-    return 1;
+    active = 1;
+  } else {
+    active = Number(r.rows[0].value);
+    // The active generation keeps its own model; the configured embedder is used for the next generation (Plan 3).
+    const g = (await db.query('SELECT embedding_dim FROM kb_meta.generations WHERE id = $1', [active])).rows[0];
+    await db.query(generationDdl(active, g.embedding_dim));
   }
-  const active = Number(r.rows[0].value);
-  // The active generation keeps its own model; the configured embedder is used for the next generation (Plan 3).
-  const g = (await db.query('SELECT embedding_dim FROM kb_meta.generations WHERE id = $1', [active])).rows[0];
-  await db.query(generationDdl(active, g.embedding_dim));
+  const schemas = (await db.query(`SELECT schema_name s FROM information_schema.schemata WHERE schema_name LIKE 'kb\\_g%'`)).rows;
+  for (const { s } of schemas) await db.query(`GRANT USAGE ON SCHEMA ${s} TO kb_query; GRANT SELECT ON ALL TABLES IN SCHEMA ${s} TO kb_query;`);
   return active;
 }
