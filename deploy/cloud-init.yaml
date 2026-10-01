@@ -1,0 +1,13 @@
+#cloud-config
+package_update: true
+packages:
+  - ca-certificates
+  - curl
+  - ufw
+runcmd:
+  - curl -fsSL https://get.docker.com | sh
+  - fallocate -l 2G /swapfile && chmod 600 /swapfile && mkswap /swapfile && swapon /swapfile && echo '/swapfile none swap sw 0 0' >> /etc/fstab
+  - ufw allow OpenSSH && ufw allow 80/tcp && ufw allow 443/tcp && ufw --force enable
+  - mkdir -p /opt/jarvis-kb/backups
+  - echo '30 3 * * * root bash /opt/jarvis-kb/deploy/backup.sh >> /var/log/jarvis-kb-backup.log 2>&1' > /etc/cron.d/jarvis-kb-backup
+  - touch /opt/jarvis-kb/.cloud-init-done

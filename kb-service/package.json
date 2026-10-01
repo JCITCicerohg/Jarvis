@@ -10,7 +10,9 @@
     "typecheck": "tsc --noEmit",
     "db:up": "docker compose up -d db",
     "smoke": "tsx --env-file-if-exists=.env scripts/smoke.ts",
-    "eval": "tsx --env-file-if-exists=.env scripts/eval.ts"
+    "eval": "tsx --env-file-if-exists=.env scripts/eval.ts",
+    "do:provision": "tsx scripts/do-provision.ts",
+    "do:deploy": "tsx scripts/do-deploy.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.129.0",
