@@ -35,6 +35,24 @@ services:
       retries: 40
       start_period: 60s
 
+  kb-test:
+    profiles: ["test"]
+    build: ../kb-service
+    restart: unless-stopped
+    env_file: ./kb.env
+    environment:
+      DATABASE_URL: postgres://kb:${POSTGRES_PASSWORD}@db:5432/kb_test
+      SOURCES_FILE: config/sources.test.yaml
+      BLOB_DIR: /data/blobs
+      HF_CACHE_DIR: /data/hf-cache
+      SYNC_MINUTES: "5"
+      PORT: "8790"
+    volumes:
+      - kbtestdata:/data
+    depends_on:
+      db:
+        condition: service_healthy
+
   n8n:
     image: docker.n8n.io/n8nio/n8n
     restart: unless-stopped
@@ -65,5 +83,6 @@ services:
 volumes:
   pgdata: {}
   kbdata: {}
+  kbtestdata: {}
   n8ndata: {}
   caddydata: {}

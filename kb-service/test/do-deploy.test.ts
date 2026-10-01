@@ -12,11 +12,12 @@ describe('do-deploy helpers', () => {
 
   it('builds kb.env: drops local-only keys and adds the n8n key', () => {
     const src = parseEnv('DATABASE_URL=postgres://local\nPORT=8790\nBLOB_DIR=data/blobs\nSYNC_MINUTES=5\nKB_API_KEYS=owner:abc\nANTHROPIC_API_KEY=sk-ant\nKB_EMBED_PROVIDER=local\nKB_MS_CLIENT_ID=cid\n');
-    const out = parseEnv(buildKbEnv(src, 'n8nkey'));
+    const out = parseEnv(buildKbEnv(src, 'n8nkey', 'abc1234'));
     expect(out.get('KB_API_KEYS')).toBe('owner:abc,n8n:n8nkey');
     expect(out.has('DATABASE_URL') || out.has('PORT') || out.has('BLOB_DIR') || out.has('SYNC_MINUTES')).toBe(false);
     expect(out.get('ANTHROPIC_API_KEY')).toBe('sk-ant');
     expect(out.get('KB_MS_CLIENT_ID')).toBe('cid');
+    expect(out.get('KB_CONFIG_VERSION')).toBe('abc1234');
   });
 
   it('does not duplicate the n8n key on a second deploy', () => {
@@ -41,5 +42,9 @@ describe('do-deploy helpers', () => {
     expect(s).toContain('chmod 600 deploy/.env deploy/kb.env');
     expect(s).toContain('docker compose -f deploy/docker-compose.yml --env-file deploy/.env up -d --build');
     expect(s).not.toMatch(/down -v|volume rm/);
+    expect(s).toContain(`SELECT 1 FROM pg_database WHERE datname='kb_test'`);
+    expect(s).toContain('createdb -U kb kb_test');
+    expect(s).toContain('grep -q "^KB_TEST_ENABLED=1" deploy/.env');
+    expect(s).toContain('--profile test up -d --build kb-test');
   });
 });

@@ -5,3 +5,7 @@ kb.{$PUBLIC_HOST} {
 n8n.{$PUBLIC_HOST} {
 	reverse_proxy n8n:5678
 }
+
+test.kb.{$PUBLIC_HOST} {
+	reverse_proxy kb-test:8790
+}
