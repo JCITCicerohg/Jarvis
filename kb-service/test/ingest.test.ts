@@ -100,6 +100,22 @@ describe('supersession', () => {
     const row = (await db.query('SELECT status, superseded_by_item FROM kb_meta.corrections WHERE id = $1', [c.id])).rows[0];
     expect(row).toEqual({ status: 'needs_review', superseded_by_item: 'ITEM1' });
   });
+
+  it('still indexes the file if flagSuperseded fails', async () => {
+    try {
+      await db.query('ALTER TABLE kb_meta.corrections RENAME TO corrections_off');
+      const result = await ingestFile(d, SRC, item({ modifiedAt: new Date(Date.now() + 60_000).toISOString() }), await glBook());
+      expect(result).toBe('indexed');
+      const doc = (await db.query('SELECT status FROM kb_g1.documents WHERE drive_item_id = $1', ['ITEM1'])).rows[0];
+      expect(doc.status).toBe('indexed');
+    } finally {
+      try {
+        await db.query('ALTER TABLE kb_meta.corrections_off RENAME TO corrections');
+      } catch {
+        // table may not exist if test failed earlier
+      }
+    }
+  });
 });
 
 describe('deleteItem / upsertFolder', () => {
