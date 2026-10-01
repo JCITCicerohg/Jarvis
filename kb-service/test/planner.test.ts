@@ -116,7 +116,7 @@ describe('planQuestion', () => {
 
 describe('factory', () => {
   const env = (over: Partial<Env>): Env => ({
-    databaseUrl: '', port: 0, blobDir: '', sourcesFile: '', apiKeys: new Map(), adminKeys: new Map(), openaiKey: 'sk', syncMinutes: 5, ms: null, configVersion: null, evalFile: 'eval/questions.jsonl',
+    databaseUrl: '', queryDatabaseUrl: '', port: 0, blobDir: '', sourcesFile: '', apiKeys: new Map(), adminKeys: new Map(), openaiKey: 'sk', syncMinutes: 5, ms: null, configVersion: null, evalFile: 'eval/questions.jsonl',
     llm: { provider: 'anthropic', model: 'claude-haiku-4-5' }, embedProvider: 'openai',
     azure: { endpoint: 'https://tiro.openai.azure.com', key: 'az', apiVersion: '2024-10-21', embedDeployment: 'emb' }, ...over,
   });

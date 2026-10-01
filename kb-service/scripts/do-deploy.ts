@@ -17,18 +17,27 @@ export function parseEnv(text: string): Map<string, string> {
   return m;
 }
 
-export function buildKbEnv(src: Map<string, string>, n8nKey: string, configVersion?: string): string {
+export function buildKbEnv(src: Map<string, string>, n8nKey: string, configVersion?: string, queryDbPassword?: string): string {
   const out = new Map([...src].filter(([k]) => !LOCAL_ONLY.includes(k)));
   const keys = (out.get('KB_API_KEYS') ?? '').split(',').map(s => s.trim()).filter(s => s && !s.startsWith('n8n:'));
   out.set('KB_API_KEYS', [...keys, `n8n:${n8nKey}`].join(','));
   if (!['openai', 'azure'].includes(out.get('KB_EMBED_PROVIDER') ?? '')) out.set('KB_EMBED_PROVIDER', 'local');
   if (configVersion) out.set('KB_CONFIG_VERSION', configVersion);
+  if (queryDbPassword) out.set('KB_QUERY_DB_PASSWORD', queryDbPassword);
   return [...out].map(([k, v]) => `${k}=${v}`).join('\n') + '\n';
 }
 
-export function loadSecrets(path: string, gen: () => string = randomHex): { postgresPassword: string; n8nKey: string } {
-  if (existsSync(path)) return JSON.parse(readFileSync(path, 'utf8'));
-  const s = { postgresPassword: gen(), n8nKey: gen() };
+export function loadSecrets(path: string, gen: () => string = randomHex): { postgresPassword: string; n8nKey: string; queryDbPassword: string } {
+  if (existsSync(path)) {
+    const s = JSON.parse(readFileSync(path, 'utf8'));
+    // Backfill queryDbPassword if missing
+    if (!s.queryDbPassword) {
+      s.queryDbPassword = gen();
+      writeFileSync(path, JSON.stringify(s, null, 2), { mode: 0o600 });
+    }
+    return s;
+  }
+  const s = { postgresPassword: gen(), n8nKey: gen(), queryDbPassword: gen() };
   writeFileSync(path, JSON.stringify(s, null, 2), { mode: 0o600 });
   return s;
 }
@@ -66,7 +75,7 @@ if (process.argv[1]?.endsWith('do-deploy.ts')) {
   const secrets = loadSecrets(join(repo, 'deploy', '.secrets.json'));
   const work = mkdtempSync(join(tmpdir(), 'kb-deploy-'));
   const version = execFileSync('git', ['-C', repo, 'rev-parse', '--short', 'HEAD']).toString().trim();
-  writeFileSync(join(work, 'kb.env'), buildKbEnv(parseEnv(readFileSync(join(repo, 'kb-service', '.env'), 'utf8')), secrets.n8nKey, version), { mode: 0o600 });
+  writeFileSync(join(work, 'kb.env'), buildKbEnv(parseEnv(readFileSync(join(repo, 'kb-service', '.env'), 'utf8')), secrets.n8nKey, version, secrets.queryDbPassword), { mode: 0o600 });
   writeFileSync(join(work, 'dot-env'), `POSTGRES_PASSWORD=${secrets.postgresPassword}\nPUBLIC_HOST=${host}\nKB_N8N_KEY=${secrets.n8nKey}\n`, { mode: 0o600 });
   execFileSync('git', ['-C', repo, 'archive', '--format=tar.gz', '-o', join(work, 'release.tgz'), 'HEAD', 'kb-service', 'deploy'], { stdio: 'inherit' });
   const ssh = ['-i', join(homedir(), '.ssh', 'jarvis_do'), '-o', 'StrictHostKeyChecking=accept-new'];
