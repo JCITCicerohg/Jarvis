@@ -6,7 +6,7 @@ import { createPool } from './db/pool.ts';
 import { embedderFor } from './embed/registry.ts';
 import { loadEvalRows } from './eval/score.ts';
 import { GenerationManager } from './gen/manager.ts';
-import { createEmbedder, createPlanner } from './llm/factory.ts';
+import { createEmbedder, createJsonModel, createPlanner } from './llm/factory.ts';
 import { expireCorrections } from './corrections/store.ts';
 import { scheduleSync } from './schedule.ts';
 import { LocalBlobStore } from './store/blob.ts';
@@ -17,6 +17,7 @@ import { syncSource } from './sync/runner.ts';
 const env = loadEnv();
 if (!env.apiKeys.size) throw new Error('KB_API_KEYS is empty; set at least one name:key pair in .env');
 const db = createPool(env.databaseUrl);
+const queryDb = createPool(env.queryDatabaseUrl);
 const next = createEmbedder(env);
 await migrate(db, next.model, next.dim);
 const sources = loadSources(env.sourcesFile);
@@ -24,6 +25,7 @@ await upsertSources(db, sources);
 const graph = env.ms ? new GraphClient(env.ms) : null;
 const blob = new LocalBlobStore(env.blobDir);
 const planner = createPlanner(env);
+const extractor = createJsonModel(env);
 const pacer = new LatencyPacer(db);
 const gens = new GenerationManager({
   db, blob, planner, sources, pacer, configVersion: env.configVersion,
@@ -45,7 +47,7 @@ async function syncAll(only?: string) {
 /** One sync at a time; a request during a run waits for it instead of starting a second one. */
 const syncNow = (only?: string) => (running ??= syncAll(only).finally(() => { running = null; }));
 
-createApp({ db, blob, apiKeys: env.apiKeys, adminKeys: env.adminKeys, sources, graph, syncNow, gens })
+createApp({ db, queryDb, blob, apiKeys: env.apiKeys, adminKeys: env.adminKeys, sources, graph, syncNow, gens, extractor })
   .listen(env.port, () => console.log(`kb-service on http://localhost:${env.port} (generation ${active.gen})`));
 const runSync = () => void syncNow();
 if (!scheduleSync(env.syncMinutes, runSync)) console.log('Scheduled sync is off (SYNC_MINUTES=0); POST /v1/sync triggers it.');

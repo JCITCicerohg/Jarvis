@@ -12,18 +12,19 @@ import { LocalBlobStore } from '../src/store/blob.ts';
 import { ingestFile } from '../src/ingest/pipeline.ts';
 import { fallbackPlan } from '../src/query/planner.ts';
 import { createApp, type GenAccess } from '../src/api/server.ts';
-import { freshDb } from './helpers.ts';
+import { freshDb, queryDb } from './helpers.ts';
 
 const SRC: SourceConfig = { id: 'hilton-pbi', name: 'Hilton Palm Beach PBI', business: 'Cicero Hospitality Group', hotel: 'Hilton Palm Beach PBI', drive_id: 'd', root_path: 'Hilton Palm Beach PBI', levels: ['department', 'dataset'], enabled: true };
-let db: Db, server: Server, base: string, synced: (string | undefined)[] = [];
+let db: Db, q: Db, server: Server, base: string, synced: (string | undefined)[] = [];
 const auth = { Authorization: 'Bearer secret', 'Content-Type': 'application/json' };
 
 beforeAll(async () => {
   db = await freshDb();
+  q = queryDb();
   await upsertSources(db, [SRC]);
   const blob = new LocalBlobStore(mkdtempSync(join(tmpdir(), 'kb-api-')));
   await ingestFile({ db, gen: 1, blob, embedder: new FakeEmbedder() }, SRC, { sourceId: 'hilton-pbi', driveItemId: 'T', parentId: null, name: 'Pool notes.csv', folders: ['Engineering'], webUrl: 'https://sp/T', mime: null, size: 1, ctag: 'c', etag: 'e', modifiedAt: '2026-09-01T00:00:00Z' }, Buffer.from('Item,Cost\nPool pump,1200\nFilter,80\n'));
-  const qd = { db, gen: 1, blob, embedder: new FakeEmbedder(), planner: { plan: async (q: string) => fallbackPlan(q) } };
+  const qd = { db: q, gen: 1, blob, embedder: new FakeEmbedder(), planner: { plan: async (q: string) => fallbackPlan(q) } };
   const gen1 = { id: 1, status: 'active' } as Generation;
   const gens: GenAccess = {
     queryDeps: async () => qd,
@@ -35,13 +36,16 @@ beforeAll(async () => {
     discard: async () => undefined,
   };
   const app = createApp({
-    db, blob, apiKeys: new Map([['secret', 'owner']]), adminKeys: new Map([['admin-secret', 'owner-admin']]),
+    db, queryDb: q, blob, apiKeys: new Map([['secret', 'owner']]), adminKeys: new Map([['admin-secret', 'owner-admin']]),
     sources: [SRC], graph: null, syncNow: async s => { synced.push(s); }, gens,
+    extractor: { name: 'fake', json: async (_s: string, user: string) => (user.includes('which place')
+      ? { fact: '', clarify: 'Which hotel do you mean?', hotel: null, department: null, dataset: null, entities: [], period_from: null, period_to: null }
+      : { fact: 'The pool pump costs 1,500 now.', clarify: null, hotel: 'Hilton Palm Beach PBI', department: null, dataset: 'Pool notes', entities: ['Pool pump'], period_from: null, period_to: null }) },
   });
   server = app.listen(0);
   base = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
 });
-afterAll(async () => { server.close(); await db.end(); });
+afterAll(async () => { server.close(); await db.end(); await q.end(); });
 
 describe('API', () => {
   it('health needs no key; /v1 rejects a missing or wrong key', async () => {
@@ -103,5 +107,22 @@ describe('API', () => {
 
   it('admin keys can also use the query API', async () => {
     expect((await fetch(`${base}/v1/status`, { headers: { Authorization: 'Bearer admin-secret' } })).status).toBe(200);
+  });
+
+  it('records corrections (global by default), asks when unclear, and lets an admin approve', async () => {
+    const c = await fetch(`${base}/v1/corrections`, { method: 'POST', headers: auth, body: JSON.stringify({ message: 'actually the pool pump costs 1500 now' }) });
+    expect(c.status).toBe(201);
+    const body = await c.json();
+    expect(body.correction).toMatchObject({ text: 'The pool pump costs 1,500 now.', author: 'owner', scope: 'global', status: 'pending', dataset: 'Pool notes' });
+    expect(body.correction).not.toHaveProperty('embedding');
+    const unclear = await (await fetch(`${base}/v1/corrections`, { method: 'POST', headers: auth, body: JSON.stringify({ message: 'which place slipped' }) })).json();
+    expect(unclear).toEqual({ clarify: 'Which hotel do you mean?' });
+    const deny = await fetch(`${base}/v1/corrections/${body.correction.id}/decide`, { method: 'POST', headers: auth, body: JSON.stringify({ decision: 'approve' }) });
+    expect(deny.status).toBe(403);
+    const ok = await fetch(`${base}/v1/corrections/${body.correction.id}/decide`, { method: 'POST', headers: { Authorization: 'Bearer admin-secret', 'Content-Type': 'application/json' }, body: JSON.stringify({ decision: 'approve' }) });
+    expect((await ok.json()).correction.status).toBe('approved');
+    const list = await (await fetch(`${base}/v1/corrections?status=approved`, { headers: auth })).json();
+    expect(list.corrections.map((x: { text: string }) => x.text)).toEqual(['The pool pump costs 1,500 now.']);
+    expect((await fetch(`${base}/v1/corrections`, { method: 'POST', headers: auth, body: JSON.stringify({ message: 'x', scope: 'team' }) })).status).toBe(400);
   });
 });
