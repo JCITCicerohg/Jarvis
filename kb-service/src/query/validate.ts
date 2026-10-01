@@ -38,7 +38,7 @@ export function monthsBetween(from: string, to: string, cap = 60): string[] {
 const LISTS: Record<FilterField, (c: Catalog) => string[]> = {
   hotel: c => c.hotels, department: c => c.departments, dataset: c => c.datasets.map(d => d.name), file_type: c => c.fileTypes,
 };
-const canonical = (c: Catalog, field: FilterField, v: string) => LISTS[field](c).find(x => x.toLowerCase() === v.trim().toLowerCase()) ?? null;
+export const canonical = (c: Catalog, field: FilterField, v: string) => LISTS[field](c).find(x => x.toLowerCase() === v.trim().toLowerCase()) ?? null;
 
 /** Checks every value against the catalog, makes periods exact, and builds the boolean filter tree. */
 export function validatePlan(raw: PlannerOutputT, catalog: Catalog): { plan: QueryPlan; notes: string[] } {
