@@ -19,6 +19,17 @@ const fake = new FakeEmbedder();
 const blob = new LocalBlobStore(mkdtempSync(join(tmpdir(), 'kb-cr-')));
 const plan = (p: Partial<PlannerOutputT> = {}): PlannerOutputT => ({ intent: 'doc_question', all: [], any_of_periods: [], exclude: [], keywords: { must: [], should: [], not: [] }, semantic: ['lobby renovation schedule'], measure: null, answer_shape: 'answer+quotes', ...p });
 
+/** FakeEmbedder that throws on the Nth call to embed. */
+class FailingEmbedder extends FakeEmbedder {
+  callCount = 0;
+  failOnCall: number;
+  constructor(failOnCall = 2) { super(); this.failOnCall = failOnCall; }
+  async embed(texts: string[]): Promise<number[][]> {
+    if (++this.callCount === this.failOnCall) throw new Error('Embedder failed');
+    return super.embed(texts);
+  }
+}
+
 beforeAll(async () => {
   db = await freshDb();
   q = queryDb();
@@ -54,5 +65,14 @@ describe('corrections in results', () => {
   it('is omitted when no user is known', async () => {
     const r = await runQuery({ db: q, gen: 1, blob, embedder: fake, planner: { plan: async () => plan() } }, 'lobby', '2026-10-01', null);
     expect(r.corrections).toBeUndefined();
+  });
+
+  it('does not fail the query when correction lookup fails', async () => {
+    const failing = new FailingEmbedder();
+    const r = await runQuery({ db: q, gen: 1, blob, embedder: failing, planner: { plan: async () => plan() } }, 'lobby renovation', '2026-10-01', 'owner');
+    expect(r.corrections).toBeUndefined();
+    expect(r.notes).toContain('Corrections are unavailable right now.');
+    expect(r.passages).toBeDefined();
+    expect(r.passages!.length).toBeGreaterThan(0);
   });
 });

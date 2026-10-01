@@ -70,9 +70,14 @@ export async function runQuery(d: QueryDeps, question: string, today = new Date(
   if (notes.length && result.confidence !== 'low') result.confidence = LOWER[result.confidence];
 
   if (user) {
-    const cited = [...(result.passages ?? []), ...(result.files ?? []), ...(result.sources ?? [])].map(x => ({ file: x.file }));
-    const corrections = await findCorrections(d, { user, question, plan, cited });
-    if (corrections.length) result.corrections = corrections;
+    try {
+      const cited = [...(result.passages ?? []), ...(result.files ?? []), ...(result.sources ?? [])].map(x => ({ file: x.file }));
+      const corrections = await findCorrections(d, { user, question, plan, cited });
+      if (corrections.length) result.corrections = corrections;
+    } catch (e) {
+      console.error('findCorrections failed:', e);
+      notes.push('Corrections are unavailable right now.');
+    }
   }
 
   const trimmed = trimResult(result);
