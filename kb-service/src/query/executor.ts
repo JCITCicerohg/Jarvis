@@ -7,6 +7,7 @@ import { runMeasure } from './numeric.ts';
 import type { QueryPlan } from './plan.ts';
 import { planQuestion, type Planner } from './planner.ts';
 import { monthsBetween, validatePlan } from './validate.ts';
+import { findCorrections, type ResultCorrection } from '../corrections/retrieve.ts';
 
 export interface QueryDeps { db: Db; gen: number; embedder: Embedder; blob: BlobStore; planner: Planner }
 type Row = Record<string, string | number | null>;
@@ -16,6 +17,7 @@ export interface QueryResult {
   passages?: { text: string; heading: string | null; file: string; page: number | null; link: string | null; period: string | null; score: number }[];
   files?: { file: string; link: string | null; period: string | null; summary: string }[];
   sources?: { file: string; link: string | null; period: string }[];
+  corrections?: ResultCorrection[];
   coverage: { requested?: string[]; missing: string[] };
   notes: string[];
   confidence: 'high' | 'medium' | 'low';
@@ -66,6 +68,12 @@ export async function runQuery(d: QueryDeps, question: string, today = new Date(
     result.confidence = n >= 3 ? 'high' : n >= 1 ? 'medium' : 'low';
   }
   if (notes.length && result.confidence !== 'low') result.confidence = LOWER[result.confidence];
+
+  if (user) {
+    const cited = [...(result.passages ?? []), ...(result.files ?? []), ...(result.sources ?? [])].map(x => ({ file: x.file }));
+    const corrections = await findCorrections(d, { user, question, plan, cited });
+    if (corrections.length) result.corrections = corrections;
+  }
 
   const trimmed = trimResult(result);
   await d.db.query(
