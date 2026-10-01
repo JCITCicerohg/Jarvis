@@ -7,7 +7,7 @@ import type { Db } from '../src/db/pool.ts';
 import type { SourceConfig } from '../src/config.ts';
 import { FakeEmbedder } from '../src/embed/embedder.ts';
 import { LocalBlobStore } from '../src/store/blob.ts';
-import { deleteItem, ingestFile, upsertFolder, type IngestDeps, type ItemInfo } from '../src/ingest/pipeline.ts';
+import { deleteItem, ingestFile, rawKey, upsertFolder, type IngestDeps, type ItemInfo } from '../src/ingest/pipeline.ts';
 import { freshDb } from './helpers.ts';
 
 const SRC: SourceConfig = { id: 'hilton-pbi', name: 'Hilton Palm Beach PBI', business: 'Cicero Hospitality Group', hotel: 'Hilton Palm Beach PBI', drive_id: 'd', root_path: 'Hilton Palm Beach PBI', levels: ['department', 'dataset'], enabled: true };
@@ -76,6 +76,19 @@ describe('ingestFile', () => {
     expect(rows[0]).toMatchObject({ drive_item_id: 'BAD', status: 'error', attempts: 1 });
     expect(rows[0].error).toBeTruthy();
     expect(rows[1]).toMatchObject({ drive_item_id: 'IMG', status: 'skipped' });
+  });
+
+  it('writes Parquet under the generation folder', async () => {
+    await ingestFile(d, SRC, item(), await glBook());
+    const key = (await db.query('SELECT blob_key FROM kb_g1.datasets')).rows[0].blob_key;
+    expect(key.startsWith('tidy/g1/hilton-pbi/')).toBe(true);
+  });
+
+  it('archives raw bytes under a new cTag even when the content is unchanged', async () => {
+    const bytes = await glBook();
+    await ingestFile(d, SRC, item({ ctag: 'c1' }), bytes);
+    expect(await ingestFile(d, SRC, item({ ctag: 'c9' }), bytes)).toBe('unchanged');
+    expect((await d.blob.get(rawKey('hilton-pbi', 'ITEM1', 'c9'))).equals(bytes)).toBe(true);
   });
 });
 
