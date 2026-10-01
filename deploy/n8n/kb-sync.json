@@ -1,0 +1,36 @@
+{
+  "id": "kbsync5min0001",
+  "name": "KB sync every 5 minutes",
+  "active": false,
+  "settings": { "executionOrder": "v1" },
+  "nodes": [
+    {
+      "id": "6f1d1c2e-0001-4a00-9000-000000000001",
+      "name": "Every 5 minutes",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [0, 0],
+      "parameters": { "rule": { "interval": [{ "field": "minutes", "minutesInterval": 5 }] } }
+    },
+    {
+      "id": "6f1d1c2e-0002-4a00-9000-000000000002",
+      "name": "Sync knowledge base",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [260, 0],
+      "parameters": {
+        "method": "POST",
+        "url": "http://kb:8790/v1/sync",
+        "sendHeaders": true,
+        "headerParameters": { "parameters": [{ "name": "Authorization", "value": "=Bearer {{ $env.KB_N8N_KEY }}" }] },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "{}",
+        "options": {}
+      }
+    }
+  ],
+  "connections": {
+    "Every 5 minutes": { "main": [[{ "node": "Sync knowledge base", "type": "main", "index": 0 }]] }
+  }
+}
